@@ -1,2 +1,3 @@
 # Run sync daily at 03:00 — edit path to match your install
-0 3 * * * cd /path/to/flickr-index && venv/bin/python main.py >> logs/sync.log 2>&1
+# Requires ts from moreutils (apt install moreutils)
+0 3 * * * cd /path/to/flickr-index && venv/bin/python main.py 2>&1 | ts '\%Y-\%m-\%dT\%H:\%M:\%S' >> logs/sync.log
