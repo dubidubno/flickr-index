@@ -57,16 +57,21 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
     out = Path(settings.output_dir)
     for photo in photos:
         pid = photo["id"]
-        if not force and state.photo_done(st, pid):
-            print(f"  skip {pid}")
+        thumb_dest = out / "photos" / pid / "thumb.jpg"
+        large_dest = out / "photos" / pid / "large.jpg"
+
+        thumb_needed = force or not thumb_dest.exists()
+        large_needed = force or not large_dest.exists()
+
+        if not thumb_needed and not large_needed:
             continue
 
         print(f"  download {pid}: {photo['title']}")
 
-        if photo["thumb_url"]:
-            flickr_client.download_photo(photo["thumb_url"], out / "photos" / pid / "thumb.jpg")
-        if photo["large_url"]:
-            flickr_client.download_photo(photo["large_url"], out / "photos" / pid / "large.jpg")
+        if photo["thumb_url"] and thumb_needed:
+            flickr_client.download_photo(photo["thumb_url"], thumb_dest)
+        if photo["large_url"] and large_needed:
+            flickr_client.download_photo(photo["large_url"], large_dest)
 
         state.mark_photo(st, pid, {"title": photo["title"]})
 
