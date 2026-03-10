@@ -59,6 +59,7 @@ def get_album_photos(flickr: flickrapi.FlickrAPI, album_id: str, user_id: str) -
             flickr.photosets.getPhotos,
             photoset_id=album_id,
             user_id=user_id,
+            privacy_filter=1,  # 1 = public only
             extras="url_q,url_b,url_o,date_taken,description,tags",
             page=page,
             per_page=500,
