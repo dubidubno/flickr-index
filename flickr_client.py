@@ -35,7 +35,23 @@ def get_api() -> flickrapi.FlickrAPI:
         settings.api_key,
         settings.api_secret,
         format="parsed-json",
+        store_token=True,
     )
+
+
+def authenticate() -> None:
+    """Run the OAuth flow interactively. Tokens are stored in ~/.flickr/."""
+    flickr = get_api()
+    if flickr.token_valid(perms="read"):
+        print("Already authenticated.")
+        return
+
+    flickr.get_request_token(oauth_callback="oob")
+    url = flickr.auth_url(perms="read")
+    print(f"\nOpen this URL in your browser:\n\n  {url}\n")
+    verifier = input("Enter the verifier code from Flickr: ").strip()
+    flickr.get_access_token(verifier)
+    print("Authentication successful. Token stored in ~/.flickr/")
 
 
 def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:

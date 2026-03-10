@@ -200,9 +200,14 @@ def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, re-fetch EXIF/location")
     parser.add_argument("--render-only", action="store_true", help="Re-render HTML only, skip all downloads and API calls")
+    parser.add_argument("--authenticate", action="store_true", help="Run Flickr OAuth flow and store token, then exit")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
     args = parser.parse_args()
+
+    if args.authenticate:
+        flickr_client.authenticate()
+        return
 
     if args.test_api_connection:
         test_api_connection()
