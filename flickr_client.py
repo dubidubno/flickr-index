@@ -12,7 +12,7 @@ import flickrapi
 from config import settings
 
 _DOWNLOAD_DELAY = 0.1   # seconds between image downloads
-_API_RETRY_DELAYS = [5, 15, 60]  # seconds to wait on successive API failures
+_API_RETRY_DELAYS = [1, 2, 5, 5, 15, 15, 15, 60]  # seconds to wait on successive API failures
 
 
 def _api_call(fn, **kwargs):
