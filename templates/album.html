@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}{{ album.title }} — {{ site_title }}{% endblock %}
+
+{% block breadcrumb %}
+<nav><a href="/">Albums</a> / {{ album.title }}</nav>
+{% endblock %}
+
+{% block head %}
+<style>
+  .album-header {
+    margin-bottom: var(--gap);
+  }
+
+  .album-header h2 {
+    font-size: clamp(1.1rem, 3vw, 1.6rem);
+    font-weight: 600;
+  }
+
+  .album-header p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-top: 0.25rem;
+  }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
+    gap: calc(var(--gap) * 0.5);
+  }
+
+  .photo-thumb {
+    display: block;
+    overflow: hidden;
+    border-radius: var(--radius);
+    background: var(--border);
+  }
+
+  .photo-thumb img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+    transition: opacity 0.15s;
+  }
+
+  .photo-thumb:hover img { opacity: 0.85; }
+
+  .pagination {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: center;
+    margin-top: calc(var(--gap) * 1.5);
+    flex-wrap: wrap;
+  }
+
+  .pagination a, .pagination span {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+  }
+
+  .pagination span { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="album-header">
+  <h2>{{ album.title }}</h2>
+  {% if album.description %}
+  <p>{{ album.description }}</p>
+  {% endif %}
+</div>
+
+<div class="photo-grid">
+  {% for photo in photos %}
+  <a class="photo-thumb" href="/photos/{{ photo.id }}/">
+    <img src="{{ photo.thumb_local }}" alt="{{ photo.title | e }}" loading="lazy" width="180" height="180">
+  </a>
+  {% endfor %}
+</div>
+
+{% if total_pages > 1 %}
+<nav class="pagination" aria-label="Pages">
+  {% if page > 1 %}
+    <a href="{% if page == 2 %}/albums/{{ album.slug }}/{% else %}/albums/{{ album.slug }}/page{{ page - 1 }}.html{% endif %}">&#8592; Prev</a>
+  {% endif %}
+  {% for p in range(1, total_pages + 1) %}
+    {% if p == page %}
+      <span>{{ p }}</span>
+    {% else %}
+      <a href="{% if p == 1 %}/albums/{{ album.slug }}/{% else %}/albums/{{ album.slug }}/page{{ p }}.html{% endif %}">{{ p }}</a>
+    {% endif %}
+  {% endfor %}
+  {% if page < total_pages %}
+    <a href="/albums/{{ album.slug }}/page{{ page + 1 }}.html">Next &#8594;</a>
+  {% endif %}
+</nav>
+{% endif %}
+{% endblock %}

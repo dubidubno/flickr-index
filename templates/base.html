@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ site_title }}{% endblock %}</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #fff;
+      --fg: #111;
+      --muted: #666;
+      --border: #e0e0e0;
+      --link: #0066cc;
+      --gap: clamp(0.75rem, 2vw, 1.5rem);
+      --radius: 4px;
+      --max-width: 1400px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #111;
+        --fg: #eee;
+        --muted: #999;
+        --border: #2a2a2a;
+        --link: #4da6ff;
+      }
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.5;
+      padding: var(--gap);
+    }
+
+    a { color: var(--link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header {
+      max-width: var(--max-width);
+      margin: 0 auto var(--gap);
+      padding-bottom: var(--gap);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    header h1 { font-size: clamp(1.1rem, 3vw, 1.5rem); font-weight: 600; }
+    header nav { font-size: 0.9rem; color: var(--muted); }
+    header nav a { color: var(--muted); }
+    header nav a:hover { color: var(--fg); }
+
+    main {
+      max-width: var(--max-width);
+      margin: 0 auto;
+    }
+
+    footer {
+      max-width: var(--max-width);
+      margin: calc(var(--gap) * 2) auto 0;
+      padding-top: var(--gap);
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <header>
+    <h1><a href="/">{{ site_title }}</a></h1>
+    {% block breadcrumb %}{% endblock %}
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>{{ site_title }}</footer>
+
+  <script>
+    window.goatcounter = { path: function(p) { return location.host + p } }
+  </script>
+  <script data-goatcounter="https://i2rtxacs3h.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
+</body>
+</html>

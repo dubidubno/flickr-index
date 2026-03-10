@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+
+{% block title %}{{ photo.title }} — {{ site_title }}{% endblock %}
+
+{% block breadcrumb %}
+<nav><a href="/">Albums</a> / <a href="/albums/{{ album.slug }}/">{{ album.title }}</a> / {{ photo.title }}</nav>
+{% endblock %}
+
+{% block head %}
+<meta property="og:title" content="{{ photo.title | e }}">
+{% if photo.description %}
+<meta property="og:description" content="{{ photo.description | e }}">
+{% endif %}
+<meta property="og:image" content="{{ photo.large_local }}">
+<style>
+  .photo-detail {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--gap);
+  }
+
+  @media (min-width: 900px) {
+    .photo-detail {
+      grid-template-columns: 1fr 280px;
+      align-items: start;
+    }
+  }
+
+  .photo-image-wrap {
+    background: var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    line-height: 0;
+  }
+
+  .photo-image-wrap img {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  .photo-meta h2 {
+    font-size: clamp(1rem, 2.5vw, 1.3rem);
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .photo-meta .description {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin-bottom: 1rem;
+    white-space: pre-wrap;
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin-bottom: 0.4rem;
+  }
+
+  .meta-row strong { color: var(--fg); min-width: 80px; }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 1rem;
+  }
+
+  .tag {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--muted);
+  }
+
+  .flickr-link {
+    display: inline-block;
+    margin-top: 1.25rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="photo-detail">
+  <div class="photo-image-wrap">
+    <img src="{{ photo.large_local }}" alt="{{ photo.title | e }}" loading="eager">
+  </div>
+
+  <div class="photo-meta">
+    <h2>{{ photo.title }}</h2>
+
+    {% if photo.description %}
+    <p class="description">{{ photo.description }}</p>
+    {% endif %}
+
+    {% if photo.date_taken %}
+    <div class="meta-row"><strong>Date</strong> {{ photo.date_taken }}</div>
+    {% endif %}
+
+    {% if photo.tags %}
+    <div class="tags">
+      {% for tag in photo.tags %}
+      <span class="tag">{{ tag }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <a class="flickr-link" href="https://www.flickr.com/photos/{{ photo.owner }}/{{ photo.id }}/" target="_blank" rel="noopener">View on Flickr ↗</a>
+  </div>
+</div>
+{% endblock %}

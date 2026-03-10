@@ -1,0 +1,5 @@
+dynaconf
+flickrapi
+jinja2
+requests
+python-slugify

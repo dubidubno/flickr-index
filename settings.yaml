@@ -1,0 +1,6 @@
+site_title: "My Photos"
+output_dir: "output"
+flickr_user_id: ""          # Your Flickr NSID, e.g. 12345678@N00
+thumb_size: "q"             # q = 150x150 square thumbnail
+large_size: "b"             # b = 1024px longest edge
+photos_per_page: 48
