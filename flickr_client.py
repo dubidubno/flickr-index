@@ -66,6 +66,12 @@ LICENSES = {
     "8": ("United States Government Work", "http://www.usa.gov/copyright.shtml"),
     "9": ("CC0 Public Domain", "https://creativecommons.org/publicdomain/zero/1.0/"),
     "10": ("Public Domain Mark", "https://creativecommons.org/publicdomain/mark/1.0/"),
+    "11": ("CC BY 4.0", "https://creativecommons.org/licenses/by/4.0/"),
+    "12": ("CC BY-SA 4.0", "https://creativecommons.org/licenses/by-sa/4.0/"),
+    "13": ("CC BY-ND 4.0", "https://creativecommons.org/licenses/by-nd/4.0/"),
+    "14": ("CC BY-NC 4.0", "https://creativecommons.org/licenses/by-nc/4.0/"),
+    "15": ("CC BY-NC-SA 4.0", "https://creativecommons.org/licenses/by-nc-sa/4.0/"),
+    "16": ("CC BY-NC-ND 4.0", "https://creativecommons.org/licenses/by-nc-nd/4.0/"),
 }
 
 
@@ -78,7 +84,7 @@ def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
             flickr.photos.search,
             user_id=user_id,
             privacy_filter=1,
-            extras="url_q,date_taken,description,tags,license",
+            extras="url_q,date_taken,description,tags,license,lastupdate",
             sort="date-posted-desc",
             page=page,
             per_page=500,
@@ -105,7 +111,10 @@ def get_exif(flickr: flickrapi.FlickrAPI, photo_id: str) -> dict:
 
     make = tag_map.get("Make", "")
     model = tag_map.get("Model", "")
-    camera = f"{make} {model}".strip() if make or model else ""
+    if make and model.lower().startswith(make.lower()):
+        camera = model
+    else:
+        camera = f"{make} {model}".strip() if make or model else ""
 
     result = {}
     if camera:

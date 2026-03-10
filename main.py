@@ -2,9 +2,8 @@
 flickr-index — generate static HTML pages from your public Flickr photos.
 
 Usage:
-    python main.py                    # full sync
+    python main.py                    # full sync (skips already-downloaded files)
     python main.py --force            # re-download everything, re-fetch EXIF/location
-    python main.py --render-only      # re-render HTML only, no downloads or API calls
     python main.py --test-api-connection
     python main.py --get-nsid <username>
 """
@@ -63,22 +62,28 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     thumb_local = f"/photo-files/{hash_dir}/{_photo_filename(thumb_url)}" if thumb_url else ""
     large_local = f"/photo-files/{hash_dir}/{_photo_filename(large_url)}"
 
-    # Fetch EXIF and location — use cached state unless force
+    # Detect if photo was updated on Flickr since last sync
     cached = st["photos"].get(pid, {})
+    lastupdate = raw.get("lastupdate", "")
+    updated = lastupdate and lastupdate != cached.get("lastupdate")
 
-    if force or "exif" not in cached:
+    if force or updated or "exif" not in cached:
         exif = flickr_client.get_exif(flickr, pid)
         cached["exif"] = exif
         state.mark_photo(st, pid, cached)
     else:
         exif = cached["exif"]
 
-    if force or "location" not in cached:
+    if force or updated or "location" not in cached:
         location = flickr_client.get_location(flickr, pid)
         cached["location"] = location
         state.mark_photo(st, pid, cached)
     else:
         location = cached["location"]
+
+    if updated:
+        cached["lastupdate"] = lastupdate
+        state.mark_photo(st, pid, cached)
 
     license_id = str(raw.get("license", "0"))
     license_name, license_url = flickr_client.LICENSES.get(license_id, ("Unknown", None))
@@ -98,6 +103,7 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
         "location": location,
         "license_name": license_name,
         "license_url": license_url,
+        "updated": updated,
     }
 
 
@@ -108,8 +114,8 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         thumb_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["thumb_url"]) if photo["thumb_url"] else None
         large_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["large_url"])
 
-        thumb_needed = thumb_dest and (force or not thumb_dest.exists())
-        large_needed = force or not large_dest.exists()
+        thumb_needed = thumb_dest and (force or photo.get("updated") or not thumb_dest.exists())
+        large_needed = force or photo.get("updated") or not large_dest.exists()
 
         if not thumb_needed and not large_needed:
             continue
@@ -204,7 +210,6 @@ def test_api_connection():
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, re-fetch EXIF/location")
-    parser.add_argument("--render-only", action="store_true", help="Re-render HTML only, skip all downloads and API calls")
     parser.add_argument("--authenticate", action="store_true", help="Run Flickr OAuth flow and store token, then exit")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
@@ -246,9 +251,8 @@ def main():
         if i % 10 == 0:
             state.save(st)
 
-    if not args.render_only:
-        print("\nDownloading images...")
-        download_photos(flickr, photos, st, args.force)
+    print("\nDownloading images...")
+    download_photos(flickr, photos, st, args.force)
 
     state.save(st)
 
@@ -257,9 +261,11 @@ def main():
     for page in range(1, total_pages + 1):
         slice_start = (page - 1) * per_page
         page_photos = photos[slice_start: slice_start + per_page]
+        print(f"  page {page}/{total_pages}")
         generator.render_photostream_page(page_photos, page, total_pages)
 
-    for photo in photos:
+    for i, photo in enumerate(photos, 1):
+        print(f"  [{i}/{len(photos)}] {photo['title']}")
         generator.render_photo(photo, album=None)
 
     state.save(st)

@@ -81,7 +81,7 @@
   <main>
     {% block content %}{% endblock %}
   </main>
-  <footer>{{ author }}</footer>
+  <footer>{{ author }} &mdash; Generated {{ generated_at }}</footer>
 
   <script>
     window.goatcounter = { path: function(p) { return location.host + p } }

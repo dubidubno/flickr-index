@@ -2,6 +2,7 @@
 HTML generator — renders Jinja2 templates into the output directory.
 """
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -33,6 +34,10 @@ def _site_url() -> str:
     return settings.get("site_url", "").rstrip("/")
 
 
+def _generated_at() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def render_albums(albums: list[dict]) -> None:
     out = Path(settings.output_dir)
     env = _env()
@@ -40,6 +45,7 @@ def render_albums(albums: list[dict]) -> None:
         site_title=settings.site_title,
         author=_author(),
         base_path=_base_path(),
+        generated_at=_generated_at(),
         albums=albums,
     )
     _write(out / "index.html", html)
@@ -52,6 +58,7 @@ def render_album(album: dict, photos: list[dict], page: int, total_pages: int) -
         site_title=settings.site_title,
         author=_author(),
         base_path=_base_path(),
+        generated_at=_generated_at(),
         album=album,
         photos=photos,
         page=page,
@@ -71,6 +78,7 @@ def render_photostream_page(photos: list[dict], page: int, total_pages: int) -> 
         site_title=settings.site_title,
         author=_author(),
         base_path=_base_path(),
+        generated_at=_generated_at(),
         photos=photos,
         page=page,
         total_pages=total_pages,
@@ -89,6 +97,7 @@ def render_photo(photo: dict, album: dict | None) -> None:
         site_title=settings.site_title,
         author=_author(),
         base_path=_base_path(),
+        generated_at=_generated_at(),
         site_url=_site_url(),
         page_url=page_url,
         photo=photo,
