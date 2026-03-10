@@ -1,4 +1,5 @@
 site_title: "My Photos"
+author: ""                  # Shown in footer, e.g. "Jane Doe"
 output_dir: "output"
 flickr_user_id: ""          # Your Flickr NSID, e.g. 12345678@N00
 thumb_size: "q"             # q = 150x150 square thumbnail

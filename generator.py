@@ -25,11 +25,16 @@ def _base_path() -> str:
     return settings.get("base_path", "").rstrip("/")
 
 
+def _author() -> str:
+    return settings.get("author", settings.site_title)
+
+
 def render_albums(albums: list[dict]) -> None:
     out = Path(settings.output_dir)
     env = _env()
     html = env.get_template("albums.html").render(
         site_title=settings.site_title,
+        author=_author(),
         base_path=_base_path(),
         albums=albums,
     )
@@ -41,6 +46,7 @@ def render_album(album: dict, photos: list[dict], page: int, total_pages: int) -
     env = _env()
     html = env.get_template("album.html").render(
         site_title=settings.site_title,
+        author=_author(),
         base_path=_base_path(),
         album=album,
         photos=photos,
@@ -59,6 +65,7 @@ def render_photostream_page(photos: list[dict], page: int, total_pages: int) -> 
     env = _env()
     html = env.get_template("photostream.html").render(
         site_title=settings.site_title,
+        author=_author(),
         base_path=_base_path(),
         photos=photos,
         page=page,
@@ -75,6 +82,7 @@ def render_photo(photo: dict, album: dict | None) -> None:
     env = _env()
     html = env.get_template("photo.html").render(
         site_title=settings.site_title,
+        author=_author(),
         base_path=_base_path(),
         photo=photo,
         album=album,

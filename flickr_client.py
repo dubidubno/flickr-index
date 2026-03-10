@@ -54,6 +54,21 @@ def authenticate() -> None:
     print("Authentication successful. Token stored in ~/.flickr/")
 
 
+LICENSES = {
+    "0": ("All Rights Reserved", None),
+    "1": ("CC BY-NC-SA", "https://creativecommons.org/licenses/by-nc-sa/2.0/"),
+    "2": ("CC BY-NC", "https://creativecommons.org/licenses/by-nc/2.0/"),
+    "3": ("CC BY-NC-ND", "https://creativecommons.org/licenses/by-nc-nd/2.0/"),
+    "4": ("CC BY", "https://creativecommons.org/licenses/by/2.0/"),
+    "5": ("CC BY-SA", "https://creativecommons.org/licenses/by-sa/2.0/"),
+    "6": ("CC BY-ND", "https://creativecommons.org/licenses/by-nd/2.0/"),
+    "7": ("No Known Copyright Restrictions", "https://www.flickr.com/commons/usage/"),
+    "8": ("United States Government Work", "http://www.usa.gov/copyright.shtml"),
+    "9": ("CC0 Public Domain", "https://creativecommons.org/publicdomain/zero/1.0/"),
+    "10": ("Public Domain Mark", "https://creativecommons.org/publicdomain/mark/1.0/"),
+}
+
+
 def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
     """Fetch all public photos for a user, newest first."""
     photos = []
@@ -63,7 +78,7 @@ def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
             flickr.photos.search,
             user_id=user_id,
             privacy_filter=1,
-            extras="url_q,date_taken,description,tags",
+            extras="url_q,date_taken,description,tags,license",
             sort="date-posted-desc",
             page=page,
             per_page=500,

@@ -148,6 +148,17 @@
     </div>
     {% endif %}
 
+    <div class="meta-section">
+      <div class="meta-row">
+        <strong>License</strong>
+        {% if photo.license_url %}
+        <a href="{{ photo.license_url }}" target="_blank" rel="noopener license">{{ photo.license_name }}</a>
+        {% else %}
+        {{ photo.license_name }}
+        {% endif %}
+      </div>
+    </div>
+
     <a class="flickr-link" href="https://www.flickr.com/photos/{{ photo.owner }}/{{ photo.id }}/" target="_blank" rel="noopener">View on Flickr ↗</a>
   </div>
 </div>

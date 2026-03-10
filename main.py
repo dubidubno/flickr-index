@@ -80,6 +80,9 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     else:
         location = cached["location"]
 
+    license_id = str(raw.get("license", "0"))
+    license_name, license_url = flickr_client.LICENSES.get(license_id, ("Unknown", None))
+
     return {
         "id": pid,
         "title": raw.get("title", pid),
@@ -93,6 +96,8 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
         "large_local": large_local,
         "exif": exif,
         "location": location,
+        "license_name": license_name,
+        "license_url": license_url,
     }
 
 
