@@ -186,6 +186,10 @@ def main():
         raw_photos = flickr_client.get_album_photos(flickr, album["id"], user_id)
         photos = [build_photo_meta(p, album["slug"]) for p in raw_photos]
 
+        if not photos:
+            print(f"  skip (no public photos)")
+            continue
+
         # Use first photo as album cover thumbnail
         if photos and photos[0]["thumb_url"]:
             album["thumb_url"] = photos[0]["thumb_url"]
