@@ -57,7 +57,7 @@
 <p class="page-heading">{{ albums | length }} album{{ 's' if albums | length != 1 }}</p>
 <div class="album-grid">
   {% for album in albums %}
-  <a class="album-card" href="/albums/{{ album.slug }}/">
+  <a class="album-card" href="{{ base_path }}/albums/{{ album.slug }}/">
     {% if album.thumb_url %}
     <img src="{{ album.thumb_url }}" alt="{{ album.title | e }}" loading="lazy" width="240" height="240">
     {% else %}

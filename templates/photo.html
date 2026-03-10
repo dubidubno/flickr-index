@@ -3,7 +3,7 @@
 {% block title %}{{ photo.title }} — {{ site_title }}{% endblock %}
 
 {% block breadcrumb %}
-<nav><a href="/">Albums</a> / <a href="/albums/{{ album.slug }}/">{{ album.title }}</a> / {{ photo.title }}</nav>
+<nav><a href="{{ base_path }}/">Albums</a> / <a href="{{ base_path }}/albums/{{ album.slug }}/">{{ album.title }}</a> / {{ photo.title }}</nav>
 {% endblock %}
 
 {% block head %}
@@ -89,7 +89,7 @@
 {% block content %}
 <div class="photo-detail">
   <div class="photo-image-wrap">
-    <img src="{{ photo.large_local }}" alt="{{ photo.title | e }}" loading="eager">
+    <img src="{{ base_path }}{{ photo.large_local }}" alt="{{ photo.title | e }}" loading="eager">
   </div>
 
   <div class="photo-meta">

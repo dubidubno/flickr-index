@@ -21,11 +21,16 @@ def _write(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _base_path() -> str:
+    return settings.get("base_path", "").rstrip("/")
+
+
 def render_albums(albums: list[dict]) -> None:
     out = Path(settings.output_dir)
     env = _env()
     html = env.get_template("albums.html").render(
         site_title=settings.site_title,
+        base_path=_base_path(),
         albums=albums,
     )
     _write(out / "index.html", html)
@@ -36,6 +41,7 @@ def render_album(album: dict, photos: list[dict], page: int, total_pages: int) -
     env = _env()
     html = env.get_template("album.html").render(
         site_title=settings.site_title,
+        base_path=_base_path(),
         album=album,
         photos=photos,
         page=page,
@@ -53,6 +59,7 @@ def render_photo(photo: dict, album: dict) -> None:
     env = _env()
     html = env.get_template("photo.html").render(
         site_title=settings.site_title,
+        base_path=_base_path(),
         photo=photo,
         album=album,
     )
