@@ -48,7 +48,7 @@ def render_albums(albums: list[dict]) -> None:
         generated_at=_generated_at(),
         albums=albums,
     )
-    _write(out / "index.html", html)
+    _write(out / "albums" / "index.html", html)
 
 
 def render_album(album: dict, photos: list[dict], page: int, total_pages: int) -> None:
@@ -84,9 +84,23 @@ def render_photostream_page(photos: list[dict], page: int, total_pages: int) -> 
         total_pages=total_pages,
     )
     if page == 1:
-        _write(out / "index.html", html)
+        _write(out / "photostream" / "index.html", html)
     else:
-        _write(out / f"page{page}.html", html)
+        _write(out / "photostream" / f"page{page}.html", html)
+
+
+def render_home(most_recent_photo: dict, albums: list[dict]) -> None:
+    out = Path(settings.output_dir)
+    env = _env()
+    html = env.get_template("home.html").render(
+        site_title=settings.site_title,
+        author=_author(),
+        base_path=_base_path(),
+        generated_at=_generated_at(),
+        most_recent_photo=most_recent_photo,
+        albums=albums,
+    )
+    _write(out / "index.html", html)
 
 
 def render_photo(photo: dict, album: dict | None) -> None:

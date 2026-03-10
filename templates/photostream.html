@@ -72,17 +72,17 @@
 {% if total_pages > 1 %}
 <nav class="pagination" aria-label="Pages">
   {% if page > 1 %}
-    <a href="{% if page == 2 %}{{ base_path }}/{% else %}{{ base_path }}/page{{ page - 1 }}.html{% endif %}">&#8592; Newer</a>
+    <a href="{% if page == 2 %}{{ base_path }}/photostream/{% else %}{{ base_path }}/photostream/page{{ page - 1 }}.html{% endif %}">&#8592; Newer</a>
   {% endif %}
   {% for p in range(1, total_pages + 1) %}
     {% if p == page %}
       <span>{{ p }}</span>
     {% else %}
-      <a href="{% if p == 1 %}{{ base_path }}/{% else %}{{ base_path }}/page{{ p }}.html{% endif %}">{{ p }}</a>
+      <a href="{% if p == 1 %}{{ base_path }}/photostream/{% else %}{{ base_path }}/photostream/page{{ p }}.html{% endif %}">{{ p }}</a>
     {% endif %}
   {% endfor %}
   {% if page < total_pages %}
-    <a href="{{ base_path }}/page{{ page + 1 }}.html">Older &#8594;</a>
+    <a href="{{ base_path }}/photostream/page{{ page + 1 }}.html">Older &#8594;</a>
   {% endif %}
 </nav>
 {% endif %}

@@ -130,6 +130,10 @@ def get_exif(flickr: flickrapi.FlickrAPI, photo_id: str) -> dict:
         if tag in tag_map and tag_map[tag]:
             result[label] = tag_map[tag]
 
+    tz = tag_map.get("OffsetTimeOriginal") or tag_map.get("OffsetTime", "")
+    if tz:
+        result["_tz_offset"] = tz
+
     return result
 
 
@@ -163,7 +167,7 @@ def get_albums(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
     albums = []
     page = 1
     while True:
-        resp = _api_call(flickr.photosets.getList, user_id=user_id, page=page, per_page=100)
+        resp = _api_call(flickr.photosets.getList, user_id=user_id, page=page, per_page=100, primary_photo_extras="url_q")
         sets = resp["photosets"]["photoset"]
         albums.extend(sets)
         if page >= resp["photosets"]["pages"]:

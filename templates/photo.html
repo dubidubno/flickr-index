@@ -4,7 +4,7 @@
 
 {% block breadcrumb %}
 <nav>
-  <a href="{{ base_path }}/">Photos</a>
+  <a href="{{ base_path }}/photostream/">Photos</a>
   {% if album %} / <a href="{{ base_path }}/albums/{{ album.slug }}/">{{ album.title }}</a>{% endif %}
   / {{ photo.title }}
 </nav>
@@ -40,7 +40,7 @@
   "@type": "Photograph",
   "name": {{ photo.title | tojson }},
   {% if photo.description %}"description": {{ photo.description | tojson }},{% endif %}
-  {% if photo.date_taken %}"dateCreated": {{ photo.date_taken | replace(' ', 'T') | tojson }},{% endif %}
+  {% if photo.date_taken_iso %}"dateCreated": {{ photo.date_taken_iso | tojson }},{% endif %}
   "image": {{ abs_image | tojson }},
   "url": {{ page_url | tojson }}
   {% if photo.tags %}, "keywords": {{ photo.tags | join(', ') | tojson }}{% endif %}

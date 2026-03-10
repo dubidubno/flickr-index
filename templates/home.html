@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+
+{% block title %}{{ site_title }}{% endblock %}
+
+{% block head %}
+<style>
+  .home-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 160px), 1fr));
+    gap: calc(var(--gap) * 0.5);
+  }
+
+  .home-card {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 0.15s;
+    text-decoration: none;
+  }
+
+  .home-card:hover { border-color: var(--link); text-decoration: none; }
+
+  .home-card img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+  }
+
+  .home-card .placeholder {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--muted);
+  }
+
+  .home-card .card-info {
+    padding: 0.5rem 0.6rem;
+    font-size: 0.85rem;
+    color: var(--fg);
+  }
+
+  .home-card .card-sub {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.15rem;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="home-grid">
+
+  <a class="home-card" href="{{ base_path }}/photos/{{ most_recent_photo.id }}/">
+    {% if most_recent_photo.thumb_local %}
+    <img src="{{ base_path }}{{ most_recent_photo.thumb_local }}" alt="{{ most_recent_photo.title | e }}" loading="eager" width="160" height="160">
+    {% else %}
+    <div class="placeholder">&#128247;</div>
+    {% endif %}
+    <div class="card-info">
+      {{ most_recent_photo.title }}
+      <div class="card-sub">Most recent photo</div>
+    </div>
+  </a>
+
+  <a class="home-card" href="{{ base_path }}/photostream/">
+    <div class="placeholder">&#128444;</div>
+    <div class="card-info">
+      All photos
+      <div class="card-sub">Photostream &rarr;</div>
+    </div>
+  </a>
+
+  <a class="home-card" href="{{ base_path }}/albums/">
+    <div class="placeholder">&#128193;</div>
+    <div class="card-info">
+      Albums
+      <div class="card-sub">{{ albums | length }} album{{ 's' if albums | length != 1 }} &rarr;</div>
+    </div>
+  </a>
+
+</div>
+{% endblock %}

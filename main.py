@@ -36,15 +36,23 @@ def _hash_dir(photo_id: str) -> str:
     return hashlib.md5(photo_id.encode()).hexdigest()[:2]
 
 
-def build_album_meta(raw: dict) -> dict:
+def build_album_meta(raw: dict, photos_by_id: dict) -> dict:
+    primary_id = raw["primary"]
+    primary_photo = photos_by_id.get(primary_id)
+    if primary_photo:
+        thumb_url = primary_photo["thumb_url"]
+        thumb_local = primary_photo["thumb_local"]
+    else:
+        thumb_url = raw.get("primary_photo_extras", {}).get("url_q", "")
+        thumb_local = None
     return {
         "id": raw["id"],
         "title": raw["title"]["_content"],
         "description": raw["description"]["_content"],
         "slug": slugify(raw["title"]["_content"]),
         "photos_count": int(raw["photos"]),
-        "thumb_url": None,
-        "thumb_local": None,
+        "thumb_url": thumb_url,
+        "thumb_local": thumb_local,
     }
 
 
@@ -88,11 +96,16 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     license_id = str(raw.get("license", "0"))
     license_name, license_url = flickr_client.LICENSES.get(license_id, ("Unknown", None))
 
+    tz_offset = exif.pop("_tz_offset", "")
+    date_taken = raw.get("datetaken", "")
+    date_taken_iso = date_taken.replace(" ", "T") + tz_offset if date_taken else ""
+
     return {
         "id": pid,
         "title": raw.get("title", pid),
         "description": raw.get("description", {}).get("_content", "") if isinstance(raw.get("description"), dict) else raw.get("description", ""),
-        "date_taken": raw.get("datetaken", ""),
+        "date_taken": date_taken,
+        "date_taken_iso": date_taken_iso,
         "tags": tags,
         "owner": raw.get("owner", ""),
         "thumb_url": thumb_url,
@@ -256,7 +269,30 @@ def main():
 
     state.save(st)
 
-    print("\nRendering pages...")
+    photos_by_id = {p["id"]: p for p in photos}
+
+    print("\nFetching albums...")
+    raw_albums = flickr_client.get_albums(flickr, user_id)
+
+    photo_to_album = {}
+    albums_meta = []
+    for raw_album in raw_albums:
+        album = build_album_meta(raw_album, photos_by_id)
+        albums_meta.append(album)
+        raw_album_photos = flickr_client.get_album_photos(flickr, raw_album["id"], user_id)
+        album_photos = [photos_by_id[p["id"]] for p in raw_album_photos if p["id"] in photos_by_id]
+        for p in album_photos:
+            photo_to_album.setdefault(p["id"], album)
+        total_album_pages = max(1, math.ceil(len(album_photos) / per_page))
+        for page in range(1, total_album_pages + 1):
+            s = (page - 1) * per_page
+            print(f"  {album['title']} page {page}/{total_album_pages}")
+            generator.render_album(album, album_photos[s:s + per_page], page, total_album_pages)
+
+    generator.render_albums(albums_meta)
+    generator.render_home(photos[0], albums_meta)
+
+    print("\nRendering photostream pages...")
     total_pages = max(1, math.ceil(len(photos) / per_page))
     for page in range(1, total_pages + 1):
         slice_start = (page - 1) * per_page
@@ -264,9 +300,10 @@ def main():
         print(f"  page {page}/{total_pages}")
         generator.render_photostream_page(page_photos, page, total_pages)
 
+    print("\nRendering photo detail pages...")
     for i, photo in enumerate(photos, 1):
         print(f"  [{i}/{len(photos)}] {photo['title']}")
-        generator.render_photo(photo, album=None)
+        generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
 
     state.save(st)
     print(f"\nDone. {len(photos)} photos across {total_pages} pages. Output in '{settings.output_dir}/'")
