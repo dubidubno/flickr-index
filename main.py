@@ -120,7 +120,7 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     }
 
 
-def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
+def download_photos(flickr, photos: list[dict], st: dict, force: bool, verbose: bool = True) -> None:
     out = Path(settings.output_dir)
     for photo in photos:
         pid = photo["id"]
@@ -133,7 +133,8 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         if not thumb_needed and not large_needed:
             continue
 
-        print(f"  download {pid}: {photo['title']}")
+        if verbose:
+            print(f"  download {pid}: {photo['title']}")
 
         if photo["thumb_url"] and thumb_needed:
             flickr_client.download_photo(photo["thumb_url"], thumb_dest)
@@ -248,6 +249,8 @@ def main():
         print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
         sys.exit(1)
 
+    verbose = sys.stdout.isatty()
+
     st = state.load()
     flickr = flickr_client.get_api()
     per_page = settings.photos_per_page
@@ -258,14 +261,15 @@ def main():
 
     photos = []
     for i, raw in enumerate(raw_photos, 1):
-        print(f"  [{i}/{len(raw_photos)}] {raw.get('title', raw['id'])}")
+        if verbose:
+            print(f"  [{i}/{len(raw_photos)}] {raw.get('title', raw['id'])}")
         photo = build_photo_meta(raw, flickr, st, args.force)
         photos.append(photo)
         if i % 10 == 0:
             state.save(st)
 
     print("\nDownloading images...")
-    download_photos(flickr, photos, st, args.force)
+    download_photos(flickr, photos, st, args.force, verbose=verbose)
 
     state.save(st)
 
@@ -286,7 +290,8 @@ def main():
         total_album_pages = max(1, math.ceil(len(album_photos) / per_page))
         for page in range(1, total_album_pages + 1):
             s = (page - 1) * per_page
-            print(f"  {album['title']} page {page}/{total_album_pages}")
+            if verbose:
+                print(f"  {album['title']} page {page}/{total_album_pages}")
             generator.render_album(album, album_photos[s:s + per_page], page, total_album_pages)
 
     generator.render_albums(albums_meta)
@@ -297,12 +302,14 @@ def main():
     for page in range(1, total_pages + 1):
         slice_start = (page - 1) * per_page
         page_photos = photos[slice_start: slice_start + per_page]
-        print(f"  page {page}/{total_pages}")
+        if verbose:
+            print(f"  page {page}/{total_pages}")
         generator.render_photostream_page(page_photos, page, total_pages)
 
     print("\nRendering photo detail pages...")
     for i, photo in enumerate(photos, 1):
-        print(f"  [{i}/{len(photos)}] {photo['title']}")
+        if verbose:
+            print(f"  [{i}/{len(photos)}] {photo['title']}")
         generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
 
     state.save(st)
