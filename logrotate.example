@@ -1,0 +1,7 @@
+/path/to/flickr-index/logs/sync.log {
+    weekly
+    rotate 8
+    compress
+    missingok
+    notifempty
+}
