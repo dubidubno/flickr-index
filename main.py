@@ -2,8 +2,9 @@
 flickr-index — generate static HTML pages from your public Flickr photos.
 
 Usage:
-    python main.py           # full sync
-    python main.py --force   # re-download everything (ignore state)
+    python main.py                    # full sync
+    python main.py --force            # re-download everything (ignore state)
+    python main.py --test-api-connection
 """
 
 import argparse
@@ -68,10 +69,61 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         state.mark_photo(st, pid, {"title": photo["title"]})
 
 
+def test_api_connection():
+    print("Checking config...")
+    ok = True
+    if not settings.get("api_key"):
+        print("  FAIL: FLICKR_INDEX_API_KEY not set in .env")
+        ok = False
+    else:
+        print("  OK:   API key present")
+
+    if not settings.get("flickr_user_id"):
+        print("  WARN: flickr_user_id not set in settings.yaml (needed for full sync)")
+    else:
+        print(f"  OK:   flickr_user_id = {settings.flickr_user_id}")
+
+    if not ok:
+        sys.exit(1)
+
+    print("Contacting Flickr API...")
+    try:
+        flickr = flickr_client.get_api()
+        resp = flickr_client._api_call(flickr.test.echo, foo="bar")
+        if resp.get("stat") == "ok":
+            print("  OK:   flickr.test.echo succeeded")
+        else:
+            print(f"  FAIL: unexpected response: {resp}")
+            sys.exit(1)
+    except Exception as exc:
+        print(f"  FAIL: {exc}")
+        sys.exit(1)
+
+    if settings.get("flickr_user_id"):
+        print(f"Fetching user info for {settings.flickr_user_id}...")
+        try:
+            resp = flickr_client._api_call(
+                flickr.people.getInfo, user_id=settings.flickr_user_id
+            )
+            username = resp["person"]["username"]["_content"]
+            photos_count = resp["person"]["photos"]["count"]["_content"]
+            print(f"  OK:   user '{username}', {photos_count} public photos")
+        except Exception as exc:
+            print(f"  FAIL: {exc}")
+            sys.exit(1)
+
+    print("\nAll checks passed.")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, ignore state")
+    parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     args = parser.parse_args()
+
+    if args.test_api_connection:
+        test_api_connection()
+        return
 
     if not settings.flickr_user_id:
         print("Error: flickr_user_id is not set in settings.yaml", file=sys.stderr)
