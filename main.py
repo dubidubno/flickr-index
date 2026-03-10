@@ -5,9 +5,11 @@ Usage:
     python main.py                    # full sync
     python main.py --force            # re-download everything (ignore state)
     python main.py --test-api-connection
+    python main.py --get-nsid <username>
 """
 
 import argparse
+import json
 import math
 import sys
 from pathlib import Path
@@ -69,6 +71,26 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         state.mark_photo(st, pid, {"title": photo["title"]})
 
 
+NSID_FILE = Path("nsid.json")
+
+
+def get_nsid(username: str) -> None:
+    flickr = flickr_client.get_api()
+    try:
+        resp = flickr_client._api_call(flickr.people.findByUsername, username=username)
+    except Exception as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+    nsid = resp["user"]["nsid"]
+    data = {"username": username, "nsid": nsid}
+    NSID_FILE.write_text(json.dumps(data, indent=2))
+    print(f"Username : {username}")
+    print(f"NSID     : {nsid}")
+    print(f"Saved to : {NSID_FILE}")
+    print(f"\nAdd to settings.yaml:\n  flickr_user_id: \"{nsid}\"")
+
+
 def test_api_connection():
     print("Checking config...")
     ok = True
@@ -79,7 +101,7 @@ def test_api_connection():
         print("  OK:   API key present")
 
     if not settings.get("flickr_user_id"):
-        print("  WARN: flickr_user_id not set in settings.yaml (needed for full sync)")
+        print("  WARN: flickr_user_id not set in settings.yaml — run --get-nsid <username>")
     else:
         print(f"  OK:   flickr_user_id = {settings.flickr_user_id}")
 
@@ -119,14 +141,19 @@ def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, ignore state")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
+    parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
     args = parser.parse_args()
 
     if args.test_api_connection:
         test_api_connection()
         return
 
-    if not settings.flickr_user_id:
-        print("Error: flickr_user_id is not set in settings.yaml", file=sys.stderr)
+    if args.get_nsid:
+        get_nsid(args.get_nsid)
+        return
+
+    if not settings.get("flickr_user_id"):
+        print("Error: flickr_user_id is not set in settings.yaml — run: python main.py --get-nsid <username>", file=sys.stderr)
         sys.exit(1)
     if not settings.api_key:
         print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
