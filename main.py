@@ -151,6 +151,7 @@ def test_api_connection():
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, ignore state")
+    parser.add_argument("--render-only", action="store_true", help="Re-render HTML only, skip downloading images")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
     args = parser.parse_args()
@@ -195,7 +196,8 @@ def main():
             album["thumb_url"] = photos[0]["thumb_url"]
             album["thumb_local"] = photos[0]["thumb_local"]
 
-        download_photos(flickr, photos, st, args.force)
+        if not args.render_only:
+            download_photos(flickr, photos, st, args.force)
 
         # Paginate album pages
         total_pages = max(1, math.ceil(len(photos) / per_page))
