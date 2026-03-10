@@ -54,7 +54,23 @@ def render_album(album: dict, photos: list[dict], page: int, total_pages: int) -
         _write(out / "albums" / slug / f"page{page}.html", html)
 
 
-def render_photo(photo: dict, album: dict) -> None:
+def render_photostream_page(photos: list[dict], page: int, total_pages: int) -> None:
+    out = Path(settings.output_dir)
+    env = _env()
+    html = env.get_template("photostream.html").render(
+        site_title=settings.site_title,
+        base_path=_base_path(),
+        photos=photos,
+        page=page,
+        total_pages=total_pages,
+    )
+    if page == 1:
+        _write(out / "index.html", html)
+    else:
+        _write(out / f"page{page}.html", html)
+
+
+def render_photo(photo: dict, album: dict | None) -> None:
     out = Path(settings.output_dir)
     env = _env()
     html = env.get_template("photo.html").render(

@@ -1,5 +1,5 @@
 """
-Flickr API wrapper — fetches albums, photos, and downloads image files.
+Flickr API wrapper — fetches photos, EXIF, location, and downloads image files.
 """
 
 import time
@@ -38,6 +38,87 @@ def get_api() -> flickrapi.FlickrAPI:
     )
 
 
+def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
+    """Fetch all public photos for a user, newest first."""
+    photos = []
+    page = 1
+    while True:
+        resp = _api_call(
+            flickr.photos.search,
+            user_id=user_id,
+            privacy_filter=1,
+            extras="url_q,date_taken,description,tags",
+            sort="date-posted-desc",
+            page=page,
+            per_page=500,
+        )
+        photos.extend(resp["photos"]["photo"])
+        if page >= resp["photos"]["pages"]:
+            break
+        page += 1
+    return photos
+
+
+def get_exif(flickr: flickrapi.FlickrAPI, photo_id: str) -> dict:
+    """Return a dict of selected EXIF fields. Returns {} if unavailable."""
+    try:
+        resp = _api_call(flickr.photos.getExif, photo_id=photo_id)
+    except flickrapi.exceptions.FlickrError:
+        return {}
+
+    tag_map = {}
+    for entry in resp.get("photo", {}).get("exif", []):
+        tag = entry.get("tag")
+        value = entry.get("clean", entry.get("raw", {})).get("_content", "")
+        tag_map[tag] = value
+
+    make = tag_map.get("Make", "")
+    model = tag_map.get("Model", "")
+    camera = f"{make} {model}".strip() if make or model else ""
+
+    result = {}
+    if camera:
+        result["Camera"] = camera
+    for label, tag in [
+        ("Lens", "LensModel"),
+        ("Aperture", "FNumber"),
+        ("Focal length", "FocalLength"),
+        ("Exposure", "ExposureTime"),
+        ("ISO", "ISO"),
+        ("Flash", "Flash"),
+    ]:
+        if tag in tag_map and tag_map[tag]:
+            result[label] = tag_map[tag]
+
+    return result
+
+
+def get_location(flickr: flickrapi.FlickrAPI, photo_id: str) -> dict:
+    """Return location dict with lat, lon, and place name parts. Returns {} if not set."""
+    try:
+        resp = _api_call(flickr.photos.getInfo, photo_id=photo_id)
+    except flickrapi.exceptions.FlickrError:
+        return {}
+
+    loc = resp.get("photo", {}).get("location", {})
+    if not loc:
+        return {}
+
+    result = {}
+    if loc.get("latitude"):
+        result["lat"] = loc["latitude"]
+    if loc.get("longitude"):
+        result["lon"] = loc["longitude"]
+    for field in ("locality", "county", "region", "country"):
+        val = loc.get(field, {})
+        if isinstance(val, dict):
+            val = val.get("_content", "")
+        if val:
+            result[field] = val
+
+    return result
+
+
 def get_albums(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
     albums = []
     page = 1
@@ -59,7 +140,7 @@ def get_album_photos(flickr: flickrapi.FlickrAPI, album_id: str, user_id: str) -
             flickr.photosets.getPhotos,
             photoset_id=album_id,
             user_id=user_id,
-            privacy_filter=1,  # 1 = public only
+            privacy_filter=1,
             extras="url_q,url_b,url_o,date_taken,description,tags",
             page=page,
             per_page=500,
@@ -69,11 +150,6 @@ def get_album_photos(flickr: flickrapi.FlickrAPI, album_id: str, user_id: str) -
             break
         page += 1
     return photos
-
-
-def get_photo_info(flickr: flickrapi.FlickrAPI, photo_id: str) -> dict:
-    resp = _api_call(flickr.photos.getInfo, photo_id=photo_id)
-    return resp["photo"]
 
 
 def download_photo(url: str, dest: Path) -> None:

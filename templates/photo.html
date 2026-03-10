@@ -3,7 +3,11 @@
 {% block title %}{{ photo.title }} — {{ site_title }}{% endblock %}
 
 {% block breadcrumb %}
-<nav><a href="{{ base_path }}/">Albums</a> / <a href="{{ base_path }}/albums/{{ album.slug }}/">{{ album.title }}</a> / {{ photo.title }}</nav>
+<nav>
+  <a href="{{ base_path }}/">Photos</a>
+  {% if album %} / <a href="{{ base_path }}/albums/{{ album.slug }}/">{{ album.title }}</a>{% endif %}
+  / {{ photo.title }}
+</nav>
 {% endblock %}
 
 {% block head %}
@@ -52,6 +56,18 @@
     white-space: pre-wrap;
   }
 
+  .meta-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .meta-section:first-of-type {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
   .meta-row {
     display: flex;
     gap: 0.5rem;
@@ -60,7 +76,7 @@
     margin-bottom: 0.4rem;
   }
 
-  .meta-row strong { color: var(--fg); min-width: 80px; }
+  .meta-row strong { color: var(--fg); min-width: 90px; flex-shrink: 0; }
 
   .tags {
     display: flex;
@@ -99,8 +115,29 @@
     <p class="description">{{ photo.description }}</p>
     {% endif %}
 
-    {% if photo.date_taken %}
-    <div class="meta-row"><strong>Date</strong> {{ photo.date_taken }}</div>
+    <div class="meta-section">
+      {% if photo.date_taken %}
+      <div class="meta-row"><strong>Date</strong> {{ photo.date_taken }}</div>
+      {% endif %}
+
+      {% if photo.exif %}
+        {% for label, value in photo.exif.items() %}
+        <div class="meta-row"><strong>{{ label }}</strong> {{ value }}</div>
+        {% endfor %}
+      {% endif %}
+    </div>
+
+    {% if photo.location %}
+    <div class="meta-section">
+      {% set loc = photo.location %}
+      {% set place_parts = [loc.locality, loc.region, loc.country] | select | list %}
+      {% if place_parts %}
+      <div class="meta-row"><strong>Location</strong> {{ place_parts | join(', ') }}</div>
+      {% endif %}
+      {% if loc.lat and loc.lon %}
+      <div class="meta-row"><strong>GPS</strong> {{ loc.lat }}, {{ loc.lon }}</div>
+      {% endif %}
+    </div>
     {% endif %}
 
     {% if photo.tags %}

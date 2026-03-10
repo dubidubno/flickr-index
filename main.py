@@ -3,17 +3,20 @@ flickr-index — generate static HTML pages from your public Flickr photos.
 
 Usage:
     python main.py                    # full sync
-    python main.py --force            # re-download everything (ignore state)
+    python main.py --force            # re-download everything, re-fetch EXIF/location
+    python main.py --render-only      # re-render HTML only, no downloads or API calls
     python main.py --test-api-connection
     python main.py --get-nsid <username>
 """
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 # Always run from the directory where main.py lives
 os.chdir(Path(__file__).parent)
@@ -26,6 +29,14 @@ import state
 from config import settings
 
 
+def _photo_filename(url: str) -> str:
+    return os.path.basename(urlparse(url).path)
+
+
+def _hash_dir(photo_id: str) -> str:
+    return hashlib.md5(photo_id.encode()).hexdigest()[:2]
+
+
 def build_album_meta(raw: dict) -> dict:
     return {
         "id": raw["id"],
@@ -33,27 +44,55 @@ def build_album_meta(raw: dict) -> dict:
         "description": raw["description"]["_content"],
         "slug": slugify(raw["title"]["_content"]),
         "photos_count": int(raw["photos"]),
-        "thumb_url": None,  # filled in below
+        "thumb_url": None,
         "thumb_local": None,
     }
 
 
-def build_photo_meta(raw: dict, album_slug: str) -> dict:
+def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     tags_raw = raw.get("tags", "")
     tags = [t.strip() for t in tags_raw.split() if t.strip()] if isinstance(tags_raw, str) else []
 
+    pid = raw["id"]
+    thumb_url = raw.get("url_q", "")
+    large_url = (
+        raw.get("url_b")
+        or f"https://live.staticflickr.com/{raw['server']}/{raw['id']}_{raw['secret']}_b.jpg"
+    )
+    hash_dir = _hash_dir(pid)
+    thumb_local = f"/photo-files/{hash_dir}/{_photo_filename(thumb_url)}" if thumb_url else ""
+    large_local = f"/photo-files/{hash_dir}/{_photo_filename(large_url)}"
+
+    # Fetch EXIF and location — use cached state unless force
+    cached = st["photos"].get(pid, {})
+
+    if force or "exif" not in cached:
+        exif = flickr_client.get_exif(flickr, pid)
+        cached["exif"] = exif
+        state.mark_photo(st, pid, cached)
+    else:
+        exif = cached["exif"]
+
+    if force or "location" not in cached:
+        location = flickr_client.get_location(flickr, pid)
+        cached["location"] = location
+        state.mark_photo(st, pid, cached)
+    else:
+        location = cached["location"]
+
     return {
-        "id": raw["id"],
-        "title": raw.get("title", raw["id"]),
+        "id": pid,
+        "title": raw.get("title", pid),
         "description": raw.get("description", {}).get("_content", "") if isinstance(raw.get("description"), dict) else raw.get("description", ""),
         "date_taken": raw.get("datetaken", ""),
         "tags": tags,
         "owner": raw.get("owner", ""),
-        "thumb_url": raw.get("url_q", ""),
-        "large_url": raw.get("url_b") or f"https://live.staticflickr.com/{raw['server']}/{raw['id']}_{raw['secret']}_b.jpg",
-        "thumb_local": f"/photos/{raw['id']}/thumb.jpg",
-        "large_local": f"/photos/{raw['id']}/large.jpg",
-        "album_slug": album_slug,
+        "thumb_url": thumb_url,
+        "large_url": large_url,
+        "thumb_local": thumb_local,
+        "large_local": large_local,
+        "exif": exif,
+        "location": location,
     }
 
 
@@ -61,10 +100,10 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
     out = Path(settings.output_dir)
     for photo in photos:
         pid = photo["id"]
-        thumb_dest = out / "photos" / pid / "thumb.jpg"
-        large_dest = out / "photos" / pid / "large.jpg"
+        thumb_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["thumb_url"]) if photo["thumb_url"] else None
+        large_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["large_url"])
 
-        thumb_needed = force or not thumb_dest.exists()
+        thumb_needed = thumb_dest and (force or not thumb_dest.exists())
         large_needed = force or not large_dest.exists()
 
         if not thumb_needed and not large_needed:
@@ -77,7 +116,9 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         if photo["large_url"] and large_needed:
             flickr_client.download_photo(photo["large_url"], large_dest)
 
-        state.mark_photo(st, pid, {"title": photo["title"]})
+        cached = st["photos"].get(pid, {})
+        cached["title"] = photo["title"]
+        state.mark_photo(st, pid, cached)
 
 
 NSID_FILE = Path("nsid.json")
@@ -144,9 +185,7 @@ def test_api_connection():
     if user_id:
         print(f"Fetching user info for {user_id}...")
         try:
-            resp = flickr_client._api_call(
-                flickr.people.getInfo, user_id=user_id
-            )
+            resp = flickr_client._api_call(flickr.people.getInfo, user_id=user_id)
             username = resp["person"]["username"]["_content"]
             photos_count = resp["person"]["photos"]["count"]["_content"]
             print(f"  OK:   user '{username}', {photos_count} public photos")
@@ -159,8 +198,8 @@ def test_api_connection():
 
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
-    parser.add_argument("--force", action="store_true", help="Re-download all photos, ignore state")
-    parser.add_argument("--render-only", action="store_true", help="Re-render HTML only, skip downloading images")
+    parser.add_argument("--force", action="store_true", help="Re-download all photos, re-fetch EXIF/location")
+    parser.add_argument("--render-only", action="store_true", help="Re-render HTML only, skip all downloads and API calls")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
     args = parser.parse_args()
@@ -185,48 +224,36 @@ def main():
     flickr = flickr_client.get_api()
     per_page = settings.photos_per_page
 
-    print("Fetching albums...")
-    raw_albums = flickr_client.get_albums(flickr, user_id)
+    print("Fetching public photostream...")
+    raw_photos = flickr_client.get_public_photos(flickr, user_id)
+    print(f"  {len(raw_photos)} public photos found")
 
-    albums_meta = []
-    for raw_album in raw_albums:
-        album = build_album_meta(raw_album)
-        print(f"\nAlbum: {album['title']} ({album['photos_count']} photos)")
+    photos = []
+    for i, raw in enumerate(raw_photos, 1):
+        print(f"  [{i}/{len(raw_photos)}] {raw.get('title', raw['id'])}")
+        photo = build_photo_meta(raw, flickr, st, args.force)
+        photos.append(photo)
+        if i % 10 == 0:
+            state.save(st)
 
-        raw_photos = flickr_client.get_album_photos(flickr, album["id"], user_id)
-        photos = [build_photo_meta(p, album["slug"]) for p in raw_photos]
-
-        if not photos:
-            print(f"  skip (no public photos)")
-            continue
-
-        # Use first photo as album cover thumbnail
-        if photos and photos[0]["thumb_url"]:
-            album["thumb_url"] = photos[0]["thumb_url"]
-            album["thumb_local"] = photos[0]["thumb_local"]
-
-        if not args.render_only:
-            download_photos(flickr, photos, st, args.force)
-
-        # Paginate album pages
-        total_pages = max(1, math.ceil(len(photos) / per_page))
-        for page in range(1, total_pages + 1):
-            slice_start = (page - 1) * per_page
-            page_photos = photos[slice_start: slice_start + per_page]
-            generator.render_album(album, page_photos, page, total_pages)
-
-        # Render individual photo pages
-        for photo in photos:
-            generator.render_photo(photo, album)
-
-        albums_meta.append(album)
-        state.save(st)
-
-    print("\nRendering album index...")
-    generator.render_albums(albums_meta)
+    if not args.render_only:
+        print("\nDownloading images...")
+        download_photos(flickr, photos, st, args.force)
 
     state.save(st)
-    print(f"\nDone. Output in '{settings.output_dir}/'")
+
+    print("\nRendering pages...")
+    total_pages = max(1, math.ceil(len(photos) / per_page))
+    for page in range(1, total_pages + 1):
+        slice_start = (page - 1) * per_page
+        page_photos = photos[slice_start: slice_start + per_page]
+        generator.render_photostream_page(page_photos, page, total_pages)
+
+    for photo in photos:
+        generator.render_photo(photo, album=None)
+
+    state.save(st)
+    print(f"\nDone. {len(photos)} photos across {total_pages} pages. Output in '{settings.output_dir}/'")
 
 
 if __name__ == "__main__":
