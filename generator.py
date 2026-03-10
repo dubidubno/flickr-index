@@ -29,6 +29,10 @@ def _author() -> str:
     return settings.get("author", settings.site_title)
 
 
+def _site_url() -> str:
+    return settings.get("site_url", "").rstrip("/")
+
+
 def render_albums(albums: list[dict]) -> None:
     out = Path(settings.output_dir)
     env = _env()
@@ -80,10 +84,13 @@ def render_photostream_page(photos: list[dict], page: int, total_pages: int) -> 
 def render_photo(photo: dict, album: dict | None) -> None:
     out = Path(settings.output_dir)
     env = _env()
+    page_url = f"{_site_url()}{_base_path()}/photos/{photo['id']}/"
     html = env.get_template("photo.html").render(
         site_title=settings.site_title,
         author=_author(),
         base_path=_base_path(),
+        site_url=_site_url(),
+        page_url=page_url,
         photo=photo,
         album=album,
     )

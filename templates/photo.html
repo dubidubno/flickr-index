@@ -10,12 +10,44 @@
 </nav>
 {% endblock %}
 
+{% set abs_image = site_url ~ base_path ~ photo.large_local %}
+
 {% block head %}
+{% if photo.description %}
+<meta name="description" content="{{ photo.description | e }}">
+{% endif %}
+
+<meta property="og:type" content="website">
+<meta property="og:url" content="{{ page_url }}">
 <meta property="og:title" content="{{ photo.title | e }}">
 {% if photo.description %}
 <meta property="og:description" content="{{ photo.description | e }}">
 {% endif %}
-<meta property="og:image" content="{{ photo.large_local }}">
+<meta property="og:image" content="{{ abs_image }}">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{{ photo.title | e }}">
+{% if photo.description %}
+<meta name="twitter:description" content="{{ photo.description | e }}">
+{% endif %}
+<meta name="twitter:image" content="{{ abs_image }}">
+
+<link rel="canonical" href="{{ page_url }}">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "Photograph",
+  "name": {{ photo.title | tojson }},
+  {% if photo.description %}"description": {{ photo.description | tojson }},{% endif %}
+  {% if photo.date_taken %}"dateCreated": {{ photo.date_taken | replace(' ', 'T') | tojson }},{% endif %}
+  "image": {{ abs_image | tojson }},
+  "url": {{ page_url | tojson }}
+  {% if photo.tags %}, "keywords": {{ photo.tags | join(', ') | tojson }}{% endif %}
+  {% if photo.license_url %}, "license": {{ photo.license_url | tojson }}{% endif %}
+}
+</script>
+
 <style>
   .photo-detail {
     display: grid;
@@ -154,7 +186,7 @@
         {% if photo.license_url %}
         <a href="{{ photo.license_url }}" target="_blank" rel="noopener license">{{ photo.license_name }}</a>
         {% else %}
-        {{ photo.license_name }}
+        &copy; {{ photo.license_name }}
         {% endif %}
       </div>
     </div>

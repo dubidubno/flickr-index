@@ -6,3 +6,4 @@ thumb_size: "q"             # q = 150x150 square thumbnail
 large_size: "b"             # b = 1024px longest edge
 photos_per_page: 24
 base_path: ""               # URL prefix, e.g. "/flickr-photos" (no trailing slash)
+site_url: ""                # Absolute base URL, e.g. "https://example.com" (no trailing slash)
