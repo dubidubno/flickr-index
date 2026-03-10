@@ -50,7 +50,7 @@ def build_photo_meta(raw: dict, album_slug: str) -> dict:
         "tags": tags,
         "owner": raw.get("owner", ""),
         "thumb_url": raw.get("url_q", ""),
-        "large_url": raw.get("url_b", ""),
+        "large_url": raw.get("url_b") or f"https://live.staticflickr.com/{raw['server']}/{raw['id']}_{raw['secret']}_b.jpg",
         "thumb_local": f"/photos/{raw['id']}/thumb.jpg",
         "large_local": f"/photos/{raw['id']}/large.jpg",
         "album_slug": album_slug,
