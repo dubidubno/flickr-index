@@ -11,8 +11,12 @@ Usage:
 import argparse
 import json
 import math
+import os
 import sys
 from pathlib import Path
+
+# Always run from the directory where main.py lives
+os.chdir(Path(__file__).parent)
 
 from slugify import slugify
 
