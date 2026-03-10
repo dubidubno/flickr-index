@@ -38,8 +38,7 @@ def get_api() -> flickrapi.FlickrAPI:
     )
 
 
-def get_albums(flickr: flickrapi.FlickrAPI) -> list[dict]:
-    user_id = settings.flickr_user_id
+def get_albums(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
     albums = []
     page = 1
     while True:
@@ -52,8 +51,7 @@ def get_albums(flickr: flickrapi.FlickrAPI) -> list[dict]:
     return albums
 
 
-def get_album_photos(flickr: flickrapi.FlickrAPI, album_id: str) -> list[dict]:
-    user_id = settings.flickr_user_id
+def get_album_photos(flickr: flickrapi.FlickrAPI, album_id: str, user_id: str) -> list[dict]:
     photos = []
     page = 1
     while True:

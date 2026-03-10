@@ -74,6 +74,15 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
 NSID_FILE = Path("nsid.json")
 
 
+def resolve_user_id() -> str | None:
+    if settings.get("flickr_user_id"):
+        return settings.flickr_user_id
+    if NSID_FILE.exists():
+        data = json.loads(NSID_FILE.read_text())
+        return data.get("nsid")
+    return None
+
+
 def get_nsid(username: str) -> None:
     flickr = flickr_client.get_api()
     try:
@@ -100,10 +109,11 @@ def test_api_connection():
     else:
         print("  OK:   API key present")
 
-    if not settings.get("flickr_user_id"):
-        print("  WARN: flickr_user_id not set in settings.yaml — run --get-nsid <username>")
+    user_id = resolve_user_id()
+    if not user_id:
+        print("  WARN: flickr_user_id not set — run --get-nsid <username>")
     else:
-        print(f"  OK:   flickr_user_id = {settings.flickr_user_id}")
+        print(f"  OK:   flickr_user_id = {user_id}")
 
     if not ok:
         sys.exit(1)
@@ -121,11 +131,12 @@ def test_api_connection():
         print(f"  FAIL: {exc}")
         sys.exit(1)
 
-    if settings.get("flickr_user_id"):
-        print(f"Fetching user info for {settings.flickr_user_id}...")
+    user_id = resolve_user_id()
+    if user_id:
+        print(f"Fetching user info for {user_id}...")
         try:
             resp = flickr_client._api_call(
-                flickr.people.getInfo, user_id=settings.flickr_user_id
+                flickr.people.getInfo, user_id=user_id
             )
             username = resp["person"]["username"]["_content"]
             photos_count = resp["person"]["photos"]["count"]["_content"]
@@ -152,8 +163,9 @@ def main():
         get_nsid(args.get_nsid)
         return
 
-    if not settings.get("flickr_user_id"):
-        print("Error: flickr_user_id is not set in settings.yaml — run: python main.py --get-nsid <username>", file=sys.stderr)
+    user_id = resolve_user_id()
+    if not user_id:
+        print("Error: flickr_user_id not set — run: python main.py --get-nsid <username>", file=sys.stderr)
         sys.exit(1)
     if not settings.api_key:
         print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
@@ -164,14 +176,14 @@ def main():
     per_page = settings.photos_per_page
 
     print("Fetching albums...")
-    raw_albums = flickr_client.get_albums(flickr)
+    raw_albums = flickr_client.get_albums(flickr, user_id)
 
     albums_meta = []
     for raw_album in raw_albums:
         album = build_album_meta(raw_album)
         print(f"\nAlbum: {album['title']} ({album['photos_count']} photos)")
 
-        raw_photos = flickr_client.get_album_photos(flickr, album["id"])
+        raw_photos = flickr_client.get_album_photos(flickr, album["id"], user_id)
         photos = [build_photo_meta(p, album["slug"]) for p in raw_photos]
 
         # Use first photo as album cover thumbnail
