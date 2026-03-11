@@ -1,4 +1,7 @@
 import flickr_client
+import main
 flickr = flickr_client.get_api()
-resp = flickr_client._api_call(flickr.photosets.getList, user_id='42575154@N00', page=1, per_page=1)
+user_id = main.resolve_user_id()
+print(f"user_id: {repr(user_id)}")
+resp = flickr_client._api_call(flickr.photosets.getList, user_id=user_id, page=1, per_page=1)
 print(resp)
