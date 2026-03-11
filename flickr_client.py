@@ -26,6 +26,8 @@ def _api_call(fn, **kwargs):
         except flickrapi.exceptions.FlickrError as exc:
             if attempt == len(_API_RETRY_DELAYS):
                 raise
+            if exc.code in (1, 2, 100, 105, 111):
+                raise  # permanent errors, don't retry
             print(f"  FlickrError: {exc}")
     raise RuntimeError("unreachable")
 
@@ -167,7 +169,7 @@ def get_albums(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
     albums = []
     page = 1
     while True:
-        resp = _api_call(flickr.photosets.getList, user_id=user_id, page=page, per_page=100, primary_photo_extras="url_q")
+        resp = _api_call(flickr.photosets.getList, page=page, per_page=100, primary_photo_extras="url_q")
         sets = resp["photosets"]["photoset"]
         albums.extend(sets)
         if page >= resp["photosets"]["pages"]:
