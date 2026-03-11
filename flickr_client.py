@@ -22,7 +22,7 @@ def _api_call(fn, **kwargs):
     """Call a Flickr API function with exponential-ish backoff on failure."""
     for attempt, delay in enumerate([0] + _API_RETRY_DELAYS):
         if delay:
-            _log.warning("API error, retrying in %ds...", delay)
+            _log.info("API error, retrying in %ds...", delay)
             time.sleep(delay)
         try:
             return fn(**kwargs)
@@ -31,7 +31,7 @@ def _api_call(fn, **kwargs):
                 raise
             if exc.code in (1, 2, 100, 105, 111):
                 raise  # permanent errors, don't retry
-            _log.debug("FlickrError: %s", exc)
+            _log.info("FlickrError: %s", exc)
     raise RuntimeError("unreachable")
 
 
@@ -89,7 +89,7 @@ def get_public_photos(flickr: flickrapi.FlickrAPI, user_id: str) -> list[dict]:
             flickr.photos.search,
             user_id=user_id,
             privacy_filter=1,
-            extras="url_q,date_taken,description,tags,license,lastupdate",
+            extras="url_q,date_taken,description,tags,license,last_update",
             sort="date-posted-desc",
             page=page,
             per_page=500,
@@ -207,7 +207,7 @@ def download_photo(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     for attempt, delay in enumerate([0] + _API_RETRY_DELAYS):
         if delay:
-            _log.warning("Download error, retrying in %ds...", delay)
+            _log.info("Download error, retrying in %ds...", delay)
             time.sleep(delay)
         try:
             urllib.request.urlretrieve(url, dest)
@@ -216,4 +216,4 @@ def download_photo(url: str, dest: Path) -> None:
         except urllib.error.URLError as exc:
             if attempt == len(_API_RETRY_DELAYS):
                 raise
-            _log.debug("URLError: %s", exc)
+            _log.info("URLError: %s", exc)

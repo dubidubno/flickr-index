@@ -18,10 +18,5 @@ def load() -> dict:
 def save(state: dict) -> None:
     STATE_FILE.write_text(json.dumps(state, indent=2))
 
-
-def photo_done(state: dict, photo_id: str) -> bool:
-    return photo_id in state["photos"]
-
-
 def mark_photo(state: dict, photo_id: str, data: dict) -> None:
     state["photos"][photo_id] = data

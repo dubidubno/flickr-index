@@ -17,6 +17,7 @@ import logging
 import math
 import os
 import smtplib
+import socket
 import sys
 import traceback
 from datetime import datetime
@@ -50,6 +51,9 @@ def setup_logging(cron: bool, debug: bool) -> logging.Logger:
     fh.setFormatter(logging.Formatter(fmt, datefmt))
     log.addHandler(fh)
 
+    # Suppress noisy flickrapi internal call logging
+    logging.getLogger("flickrapi").setLevel(logging.WARNING)
+
     # Console handler — suppressed in --cron mode
     if not cron:
         ch = logging.StreamHandler()
@@ -57,6 +61,27 @@ def setup_logging(cron: bool, debug: bool) -> logging.Logger:
         log.addHandler(ch)
 
     return log
+
+
+def _summary_to_html(summary: str) -> str:
+    rows = []
+    for line in summary.strip().splitlines():
+        if ": " in line:
+            key, _, value = line.partition(": ")
+            rows.append(
+                f"<tr><td style='padding:2px 16px 2px 0;color:#666;white-space:nowrap'>{key}</td>"
+                f"<td style='padding:2px 0'>{value}</td></tr>"
+            )
+        elif line.strip():
+            rows.append(
+                f"<tr><td colspan='2' style='padding:6px 0;font-family:monospace;font-size:12px'>{line}</td></tr>"
+            )
+    return (
+        "<html><body style='font-family:sans-serif;font-size:14px'>"
+        "<table style='border:none;border-collapse:collapse'>"
+        + "".join(rows)
+        + "</table></body></html>"
+    )
 
 
 def send_email(success: bool, summary: str, settings) -> None:
@@ -67,12 +92,13 @@ def send_email(success: bool, summary: str, settings) -> None:
     smtp_host = settings.get("notify_smtp_host", "localhost")
     smtp_port = int(settings.get("notify_smtp_port", 25))
 
-    subject = f"[flickr-index] {'OK' if success else 'FAILED'} — {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    subject = f"[flickr-index] {'OK' if success else 'FAILED'} — {datetime.now().astimezone().strftime('%Y-%m-%d %H:%M %Z')}"
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_addr
     msg.set_content(summary)
+    msg.add_alternative(_summary_to_html(summary), subtype="html")
 
     try:
         with smtplib.SMTP(smtp_host, smtp_port) as s:
@@ -143,7 +169,7 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     else:
         location = cached["location"]
 
-    if updated:
+    if lastupdate:
         cached["lastupdate"] = lastupdate
         state.mark_photo(st, pid, cached)
 
@@ -176,7 +202,7 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
 
 def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
     out = Path(settings.output_dir)
-    for photo in photos:
+    for i, photo in enumerate(photos, 1):
         pid = photo["id"]
         thumb_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["thumb_url"]) if photo["thumb_url"] else None
         large_dest = out / "photo-files" / _hash_dir(pid) / _photo_filename(photo["large_url"])
@@ -187,7 +213,7 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
         if not thumb_needed and not large_needed:
             continue
 
-        logging.debug("download %s: %s", pid, photo["title"])
+        logging.info("download [%d/%d] %s: %s", i, len(photos), pid, photo["title"])
 
         if photo["thumb_url"] and thumb_needed:
             flickr_client.download_photo(photo["thumb_url"], thumb_dest)
@@ -307,6 +333,7 @@ def main():
     args = parser.parse_args()
 
     setup_logging(cron=args.cron, debug=args.debug)
+    logging.info("START -----------------------------------------------")
 
     if args.authenticate:
         flickr_client.authenticate()
@@ -329,7 +356,7 @@ def main():
         logging.error("FLICKR_INDEX_API_KEY is not set in .env")
         sys.exit(1)
 
-    run_start = datetime.now()
+    run_start = datetime.now().astimezone()
     warnings_count = [0]
 
     # Patch logging to count warnings
@@ -339,7 +366,8 @@ def main():
         original_warning(msg, *args, **kwargs)
     logging.warning = counting_warning
 
-    summary_lines = [f"Run: {run_start.strftime('%Y-%m-%dT%H:%M:%S')}"]
+    footer = f"\nHost: {socket.gethostname()}\nScript: {Path(__file__).resolve()}"
+    summary_lines = [f"Run: {run_start.strftime('%Y-%m-%dT%H:%M:%S %Z')}"]
 
     try:
         st = state.load()
@@ -355,13 +383,18 @@ def main():
         raw_photos = flickr_client.get_public_photos(flickr, user_id)
         logging.info("%d public photos found", len(raw_photos))
 
+        known_ids = set(st["photos"].keys())
         photos = []
         for i, raw in enumerate(raw_photos, 1):
-            logging.debug("[%d/%d] %s", i, len(raw_photos), raw.get("title", raw["id"]))
+            logging.info("[%d/%d] %s", i, len(raw_photos), raw.get("title", raw["id"]))
             photo = build_photo_meta(raw, flickr, st, args.force)
             photos.append(photo)
             if i % 10 == 0:
                 state.save(st)
+
+        any_changes = args.force or any(
+            p["updated"] or p["id"] not in known_ids for p in photos
+        )
 
         logging.info("Downloading images...")
         download_photos(flickr, photos, st, args.force)
@@ -372,6 +405,16 @@ def main():
 
         logging.info("Fetching albums...")
         raw_albums = flickr_client.get_albums(flickr, user_id)
+
+        known_album_ids = set(st["albums"].keys())
+        for raw_album in raw_albums:
+            aid = raw_album["id"]
+            date_update = raw_album.get("date_update", "")
+            if aid not in known_album_ids or date_update != st["albums"].get(aid, {}).get("date_update"):
+                any_changes = True
+            st["albums"][aid] = {"date_update": date_update}
+        if set(raw_album["id"] for raw_album in raw_albums) != known_album_ids:
+            any_changes = True
 
         photo_to_album = {}
         albums_meta = []
@@ -385,33 +428,38 @@ def main():
                 photo_to_album.setdefault(p["id"], album)
             album_pages = max(1, math.ceil(len(album_photos) / per_page))
             total_album_pages += album_pages
-            for page in range(1, album_pages + 1):
-                s = (page - 1) * per_page
-                logging.debug("  %s page %d/%d", album["title"], page, album_pages)
-                generator.render_album(album, album_photos[s:s + per_page], page, album_pages)
+            if any_changes:
+                for page in range(1, album_pages + 1):
+                    s = (page - 1) * per_page
+                    logging.debug("  %s page %d/%d", album["title"], page, album_pages)
+                    generator.render_album(album, album_photos[s:s + per_page], page, album_pages)
 
-        generator.render_albums(albums_meta)
-        generator.render_home(photos[0], albums_meta)
+        if not any_changes:
+            logging.info("No changes detected — skipping rendering")
+        else:
+            generator.render_albums(albums_meta)
+            generator.render_home(photos[0], albums_meta)
 
-        logging.info("Rendering photostream pages...")
-        total_pages = max(1, math.ceil(len(photos) / per_page))
-        for page in range(1, total_pages + 1):
-            slice_start = (page - 1) * per_page
-            page_photos = photos[slice_start: slice_start + per_page]
-            logging.debug("  page %d/%d", page, total_pages)
-            generator.render_photostream_page(page_photos, page, total_pages)
+            logging.info("Rendering photostream pages...")
+            total_pages = max(1, math.ceil(len(photos) / per_page))
+            for page in range(1, total_pages + 1):
+                slice_start = (page - 1) * per_page
+                page_photos = photos[slice_start: slice_start + per_page]
+                logging.debug("  page %d/%d", page, total_pages)
+                generator.render_photostream_page(page_photos, page, total_pages)
 
-        logging.info("Rendering photo detail pages...")
-        for i, photo in enumerate(photos, 1):
-            logging.debug("[%d/%d] %s", i, len(photos), photo["title"])
-            generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
+            logging.info("Rendering photo detail pages...")
+            for i, photo in enumerate(photos, 1):
+                logging.debug("[%d/%d] %s", i, len(photos), photo["title"])
+                generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
 
         state.save(st)
 
-        duration = datetime.now() - run_start
+        duration = datetime.now().astimezone() - run_start
         total_secs = int(duration.total_seconds())
         duration_str = f"{total_secs // 60}m {total_secs % 60}s"
 
+        total_pages = max(1, math.ceil(len(photos) / per_page))
         logging.info(
             "Done. %d photos, %d albums, %d pages. Output in '%s/'. Duration: %s",
             len(photos), len(albums_meta), total_pages, settings.output_dir, duration_str,
@@ -419,16 +467,17 @@ def main():
 
         summary_lines += [
             "Status: OK",
+            f"Rendered: {'YES' if any_changes else 'NO'}",
             f"Photos: {len(photos)}",
             f"Albums: {len(albums_meta)}",
             f"Pages: {total_pages}",
             f"Duration: {duration_str}",
             f"Warnings: {warnings_count[0]}",
         ]
-        send_email(success=True, summary="\n".join(summary_lines), settings=settings)
+        send_email(success=True, summary="\n".join(summary_lines) + footer, settings=settings)
 
     except Exception:
-        duration = datetime.now() - run_start
+        duration = datetime.now().astimezone() - run_start
         total_secs = int(duration.total_seconds())
         duration_str = f"{total_secs // 60}m {total_secs % 60}s"
         tb = traceback.format_exc()
@@ -440,7 +489,7 @@ def main():
             "",
             tb,
         ]
-        send_email(success=False, summary="\n".join(summary_lines), settings=settings)
+        send_email(success=False, summary="\n".join(summary_lines) + footer, settings=settings)
         sys.exit(2)
     finally:
         logging.warning = original_warning
