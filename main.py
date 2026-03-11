@@ -43,7 +43,7 @@ def build_album_meta(raw: dict, photos_by_id: dict) -> dict:
         thumb_url = primary_photo["thumb_url"]
         thumb_local = primary_photo["thumb_local"]
     else:
-        thumb_url = raw.get("primary_photo_extras", {}).get("url_q", "")
+        thumb_url = ""
         thumb_local = None
     return {
         "id": raw["id"],
