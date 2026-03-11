@@ -245,6 +245,10 @@ def main():
     if not user_id:
         print("Error: flickr_user_id not set — run: python main.py --get-nsid <username>", file=sys.stderr)
         sys.exit(1)
+    if "@" not in user_id:
+        print(f"Error: flickr_user_id looks like a username ({user_id!r}), expected an NSID like 12345678@N00", file=sys.stderr)
+        print("Run: python main.py --get-nsid <username>", file=sys.stderr)
+        sys.exit(1)
     if not settings.api_key:
         print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
         sys.exit(1)
