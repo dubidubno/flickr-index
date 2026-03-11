@@ -2,6 +2,7 @@
 HTML generator — renders Jinja2 templates into the output directory.
 """
 
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,7 +20,9 @@ def _env() -> Environment:
 
 def _write(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    os.replace(tmp, path)  # atomic on POSIX
 
 
 def _base_path() -> str:

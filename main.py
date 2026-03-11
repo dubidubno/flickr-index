@@ -4,6 +4,8 @@ flickr-index — generate static HTML pages from your public Flickr photos.
 Usage:
     python main.py                    # full sync (skips already-downloaded files)
     python main.py --force            # re-download everything, re-fetch EXIF/location
+    python main.py --cron             # suppress console output (log to file only)
+    python main.py --debug            # verbose DEBUG output
     python main.py --test-api-connection
     python main.py --get-nsid <username>
 """
@@ -11,9 +13,15 @@ Usage:
 import argparse
 import hashlib
 import json
+import logging
 import math
 import os
+import smtplib
 import sys
+import traceback
+from datetime import datetime
+from email.message import EmailMessage
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -26,6 +34,52 @@ import flickr_client
 import generator
 import state
 from config import settings
+
+
+def setup_logging(cron: bool, debug: bool) -> logging.Logger:
+    level = logging.DEBUG if debug else logging.INFO
+    fmt = "%(asctime)s %(levelname)-8s %(message)s"
+    datefmt = "%Y-%m-%dT%H:%M:%S"
+
+    log = logging.getLogger()
+    log.setLevel(level)
+
+    # Always log to file with rotation (1 MB × 8 backups)
+    Path("logs").mkdir(exist_ok=True)
+    fh = RotatingFileHandler("logs/sync.log", maxBytes=1_000_000, backupCount=8, encoding="utf-8")
+    fh.setFormatter(logging.Formatter(fmt, datefmt))
+    log.addHandler(fh)
+
+    # Console handler — suppressed in --cron mode
+    if not cron:
+        ch = logging.StreamHandler()
+        ch.setFormatter(logging.Formatter(fmt, datefmt))
+        log.addHandler(ch)
+
+    return log
+
+
+def send_email(success: bool, summary: str, settings) -> None:
+    to_addr = settings.get("notify_email_to", "")
+    if not to_addr:
+        return
+    from_addr = settings.get("notify_email_from", "")
+    smtp_host = settings.get("notify_smtp_host", "localhost")
+    smtp_port = int(settings.get("notify_smtp_port", 25))
+
+    subject = f"[flickr-index] {'OK' if success else 'FAILED'} — {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_addr
+    msg.set_content(summary)
+
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port) as s:
+            s.send_message(msg)
+        logging.info("Email notification sent to %s", to_addr)
+    except Exception as exc:
+        logging.warning("Failed to send email: %s", exc)
 
 
 def _photo_filename(url: str) -> str:
@@ -120,7 +174,7 @@ def build_photo_meta(raw: dict, flickr, st: dict, force: bool) -> dict:
     }
 
 
-def download_photos(flickr, photos: list[dict], st: dict, force: bool, verbose: bool = True) -> None:
+def download_photos(flickr, photos: list[dict], st: dict, force: bool) -> None:
     out = Path(settings.output_dir)
     for photo in photos:
         pid = photo["id"]
@@ -133,8 +187,7 @@ def download_photos(flickr, photos: list[dict], st: dict, force: bool, verbose: 
         if not thumb_needed and not large_needed:
             continue
 
-        if verbose:
-            print(f"  download {pid}: {photo['title']}")
+        logging.debug("download %s: %s", pid, photo["title"])
 
         if photo["thumb_url"] and thumb_needed:
             flickr_client.download_photo(photo["thumb_url"], thumb_dest)
@@ -165,16 +218,16 @@ def resolve_user_id() -> str | None:
 
     # Look up via API
     if username:
-        print(f"Looking up NSID for username '{username}'...")
+        logging.info("Looking up NSID for username '%s'...", username)
         flickr = flickr_client.get_api()
         try:
             resp = flickr_client._api_call(flickr.people.findByUsername, username=username)
         except Exception as exc:
-            print(f"Error looking up NSID: {exc}", file=sys.stderr)
+            logging.error("Error looking up NSID: %s", exc)
             return None
         nsid = resp["user"]["nsid"]
         NSID_FILE.write_text(json.dumps({"username": username, "nsid": nsid}, indent=2))
-        print(f"  NSID: {nsid} (saved to {NSID_FILE})")
+        logging.info("NSID: %s (saved to %s)", nsid, NSID_FILE)
         return nsid
 
     return None
@@ -185,7 +238,7 @@ def get_nsid(username: str) -> None:
     try:
         resp = flickr_client._api_call(flickr.people.findByUsername, username=username)
     except Exception as exc:
-        print(f"Error: {exc}", file=sys.stderr)
+        logging.error("Error: %s", exc)
         sys.exit(1)
 
     nsid = resp["user"]["nsid"]
@@ -246,10 +299,14 @@ def test_api_connection():
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, re-fetch EXIF/location")
+    parser.add_argument("--cron", action="store_true", help="Suppress console output (log to file only)")
+    parser.add_argument("--debug", action="store_true", help="Set log level to DEBUG")
     parser.add_argument("--authenticate", action="store_true", help="Run Flickr OAuth flow and store token, then exit")
     parser.add_argument("--test-api-connection", action="store_true", help="Verify config and API connectivity, then exit")
     parser.add_argument("--get-nsid", metavar="USERNAME", help="Look up Flickr NSID for a username and save to nsid.json")
     args = parser.parse_args()
+
+    setup_logging(cron=args.cron, debug=args.debug)
 
     if args.authenticate:
         flickr_client.authenticate()
@@ -265,83 +322,128 @@ def main():
 
     user_id = resolve_user_id()
     if not user_id:
-        print("Error: flickr_user_id not set — run: python main.py --get-nsid <username>", file=sys.stderr)
+        logging.error("flickr_user_id not set — run: python main.py --get-nsid <username>")
         sys.exit(1)
 
     if not settings.api_key:
-        print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
+        logging.error("FLICKR_INDEX_API_KEY is not set in .env")
         sys.exit(1)
 
-    verbose = sys.stdout.isatty()
+    run_start = datetime.now()
+    warnings_count = [0]
 
-    st = state.load()
-    flickr = flickr_client.get_api()
+    # Patch logging to count warnings
+    original_warning = logging.warning
+    def counting_warning(msg, *args, **kwargs):
+        warnings_count[0] += 1
+        original_warning(msg, *args, **kwargs)
+    logging.warning = counting_warning
 
-    if not flickr.token_valid(perms="read"):
-        print("Error: not authenticated — run: python main.py --authenticate", file=sys.stderr)
-        sys.exit(1)
+    summary_lines = [f"Run: {run_start.strftime('%Y-%m-%dT%H:%M:%S')}"]
 
-    per_page = settings.photos_per_page
+    try:
+        st = state.load()
+        flickr = flickr_client.get_api()
 
-    print("Fetching public photostream...")
-    raw_photos = flickr_client.get_public_photos(flickr, user_id)
-    print(f"  {len(raw_photos)} public photos found")
+        if not flickr.token_valid(perms="read"):
+            logging.error("Not authenticated — run: python main.py --authenticate")
+            sys.exit(1)
 
-    photos = []
-    for i, raw in enumerate(raw_photos, 1):
-        if verbose:
-            print(f"  [{i}/{len(raw_photos)}] {raw.get('title', raw['id'])}")
-        photo = build_photo_meta(raw, flickr, st, args.force)
-        photos.append(photo)
-        if i % 10 == 0:
-            state.save(st)
+        per_page = settings.photos_per_page
 
-    print("\nDownloading images...")
-    download_photos(flickr, photos, st, args.force, verbose=verbose)
+        logging.info("Fetching public photostream...")
+        raw_photos = flickr_client.get_public_photos(flickr, user_id)
+        logging.info("%d public photos found", len(raw_photos))
 
-    state.save(st)
+        photos = []
+        for i, raw in enumerate(raw_photos, 1):
+            logging.debug("[%d/%d] %s", i, len(raw_photos), raw.get("title", raw["id"]))
+            photo = build_photo_meta(raw, flickr, st, args.force)
+            photos.append(photo)
+            if i % 10 == 0:
+                state.save(st)
 
-    photos_by_id = {p["id"]: p for p in photos}
+        logging.info("Downloading images...")
+        download_photos(flickr, photos, st, args.force)
 
-    print("\nFetching albums...")
-    raw_albums = flickr_client.get_albums(flickr, user_id)
+        state.save(st)
 
-    photo_to_album = {}
-    albums_meta = []
-    for raw_album in raw_albums:
-        album = build_album_meta(raw_album, photos_by_id)
-        albums_meta.append(album)
-        raw_album_photos = flickr_client.get_album_photos(flickr, raw_album["id"], user_id)
-        album_photos = [photos_by_id[p["id"]] for p in raw_album_photos if p["id"] in photos_by_id]
-        for p in album_photos:
-            photo_to_album.setdefault(p["id"], album)
-        total_album_pages = max(1, math.ceil(len(album_photos) / per_page))
-        for page in range(1, total_album_pages + 1):
-            s = (page - 1) * per_page
-            if verbose:
-                print(f"  {album['title']} page {page}/{total_album_pages}")
-            generator.render_album(album, album_photos[s:s + per_page], page, total_album_pages)
+        photos_by_id = {p["id"]: p for p in photos}
 
-    generator.render_albums(albums_meta)
-    generator.render_home(photos[0], albums_meta)
+        logging.info("Fetching albums...")
+        raw_albums = flickr_client.get_albums(flickr, user_id)
 
-    print("\nRendering photostream pages...")
-    total_pages = max(1, math.ceil(len(photos) / per_page))
-    for page in range(1, total_pages + 1):
-        slice_start = (page - 1) * per_page
-        page_photos = photos[slice_start: slice_start + per_page]
-        if verbose:
-            print(f"  page {page}/{total_pages}")
-        generator.render_photostream_page(page_photos, page, total_pages)
+        photo_to_album = {}
+        albums_meta = []
+        total_album_pages = 0
+        for raw_album in raw_albums:
+            album = build_album_meta(raw_album, photos_by_id)
+            albums_meta.append(album)
+            raw_album_photos = flickr_client.get_album_photos(flickr, raw_album["id"], user_id)
+            album_photos = [photos_by_id[p["id"]] for p in raw_album_photos if p["id"] in photos_by_id]
+            for p in album_photos:
+                photo_to_album.setdefault(p["id"], album)
+            album_pages = max(1, math.ceil(len(album_photos) / per_page))
+            total_album_pages += album_pages
+            for page in range(1, album_pages + 1):
+                s = (page - 1) * per_page
+                logging.debug("  %s page %d/%d", album["title"], page, album_pages)
+                generator.render_album(album, album_photos[s:s + per_page], page, album_pages)
 
-    print("\nRendering photo detail pages...")
-    for i, photo in enumerate(photos, 1):
-        if verbose:
-            print(f"  [{i}/{len(photos)}] {photo['title']}")
-        generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
+        generator.render_albums(albums_meta)
+        generator.render_home(photos[0], albums_meta)
 
-    state.save(st)
-    print(f"\nDone. {len(photos)} photos across {total_pages} pages. Output in '{settings.output_dir}/'")
+        logging.info("Rendering photostream pages...")
+        total_pages = max(1, math.ceil(len(photos) / per_page))
+        for page in range(1, total_pages + 1):
+            slice_start = (page - 1) * per_page
+            page_photos = photos[slice_start: slice_start + per_page]
+            logging.debug("  page %d/%d", page, total_pages)
+            generator.render_photostream_page(page_photos, page, total_pages)
+
+        logging.info("Rendering photo detail pages...")
+        for i, photo in enumerate(photos, 1):
+            logging.debug("[%d/%d] %s", i, len(photos), photo["title"])
+            generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
+
+        state.save(st)
+
+        duration = datetime.now() - run_start
+        total_secs = int(duration.total_seconds())
+        duration_str = f"{total_secs // 60}m {total_secs % 60}s"
+
+        logging.info(
+            "Done. %d photos, %d albums, %d pages. Output in '%s/'. Duration: %s",
+            len(photos), len(albums_meta), total_pages, settings.output_dir, duration_str,
+        )
+
+        summary_lines += [
+            "Status: OK",
+            f"Photos: {len(photos)}",
+            f"Albums: {len(albums_meta)}",
+            f"Pages: {total_pages}",
+            f"Duration: {duration_str}",
+            f"Warnings: {warnings_count[0]}",
+        ]
+        send_email(success=True, summary="\n".join(summary_lines), settings=settings)
+
+    except Exception:
+        duration = datetime.now() - run_start
+        total_secs = int(duration.total_seconds())
+        duration_str = f"{total_secs // 60}m {total_secs % 60}s"
+        tb = traceback.format_exc()
+        logging.exception("Sync failed with unhandled exception")
+        summary_lines += [
+            "Status: FAILED",
+            f"Duration: {duration_str}",
+            f"Warnings: {warnings_count[0]}",
+            "",
+            tb,
+        ]
+        send_email(success=False, summary="\n".join(summary_lines), settings=settings)
+        sys.exit(2)
+    finally:
+        logging.warning = original_warning
 
 
 if __name__ == "__main__":

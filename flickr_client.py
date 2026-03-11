@@ -2,6 +2,7 @@
 Flickr API wrapper — fetches photos, EXIF, location, and downloads image files.
 """
 
+import logging
 import time
 import urllib.error
 import urllib.request
@@ -11,6 +12,8 @@ import flickrapi
 
 from config import settings
 
+_log = logging.getLogger(__name__)
+
 _DOWNLOAD_DELAY = 0.1   # seconds between image downloads
 _API_RETRY_DELAYS = [1, 2, 5, 5, 15, 15, 15, 60]  # seconds to wait on successive API failures
 
@@ -19,7 +22,7 @@ def _api_call(fn, **kwargs):
     """Call a Flickr API function with exponential-ish backoff on failure."""
     for attempt, delay in enumerate([0] + _API_RETRY_DELAYS):
         if delay:
-            print(f"  API error, retrying in {delay}s...")
+            _log.warning("API error, retrying in %ds...", delay)
             time.sleep(delay)
         try:
             return fn(**kwargs)
@@ -28,7 +31,7 @@ def _api_call(fn, **kwargs):
                 raise
             if exc.code in (1, 2, 100, 105, 111):
                 raise  # permanent errors, don't retry
-            print(f"  FlickrError: {exc}")
+            _log.debug("FlickrError: %s", exc)
     raise RuntimeError("unreachable")
 
 
@@ -45,7 +48,7 @@ def authenticate() -> None:
     """Run the OAuth flow interactively. Tokens are stored in ~/.flickr/."""
     flickr = get_api()
     if flickr.token_valid(perms="read"):
-        print("Already authenticated.")
+        _log.info("Already authenticated.")
         return
 
     flickr.get_request_token(oauth_callback="oob")
@@ -53,7 +56,7 @@ def authenticate() -> None:
     print(f"\nOpen this URL in your browser:\n\n  {url}\n")
     verifier = input("Enter the verifier code from Flickr: ").strip()
     flickr.get_access_token(verifier)
-    print("Authentication successful. Token stored in ~/.flickr/")
+    _log.info("Authentication successful. Token stored in ~/.flickr/")
 
 
 LICENSES = {
@@ -204,7 +207,7 @@ def download_photo(url: str, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
     for attempt, delay in enumerate([0] + _API_RETRY_DELAYS):
         if delay:
-            print(f"  download error, retrying in {delay}s...")
+            _log.warning("Download error, retrying in %ds...", delay)
             time.sleep(delay)
         try:
             urllib.request.urlretrieve(url, dest)
@@ -213,4 +216,4 @@ def download_photo(url: str, dest: Path) -> None:
         except urllib.error.URLError as exc:
             if attempt == len(_API_RETRY_DELAYS):
                 raise
-            print(f"  URLError: {exc}")
+            _log.debug("URLError: %s", exc)
