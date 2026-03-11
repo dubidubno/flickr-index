@@ -253,6 +253,11 @@ def main():
 
     st = state.load()
     flickr = flickr_client.get_api()
+
+    if not flickr.token_valid(perms="read"):
+        print("Error: not authenticated — run: python main.py --authenticate", file=sys.stderr)
+        sys.exit(1)
+
     per_page = settings.photos_per_page
 
     print("Fetching public photostream...")
