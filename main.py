@@ -150,11 +150,33 @@ NSID_FILE = Path("nsid.json")
 
 
 def resolve_user_id() -> str | None:
-    if settings.get("flickr_user_id"):
-        return settings.flickr_user_id
+    configured = settings.get("flickr_user_id", "")
+
+    # Already an NSID
+    if configured and "@" in configured:
+        return configured
+
+    # Username configured — check nsid.json cache first
+    username = configured or None
     if NSID_FILE.exists():
         data = json.loads(NSID_FILE.read_text())
-        return data.get("nsid")
+        if not username or data.get("username") == username:
+            return data.get("nsid")
+
+    # Look up via API
+    if username:
+        print(f"Looking up NSID for username '{username}'...")
+        flickr = flickr_client.get_api()
+        try:
+            resp = flickr_client._api_call(flickr.people.findByUsername, username=username)
+        except Exception as exc:
+            print(f"Error looking up NSID: {exc}", file=sys.stderr)
+            return None
+        nsid = resp["user"]["nsid"]
+        NSID_FILE.write_text(json.dumps({"username": username, "nsid": nsid}, indent=2))
+        print(f"  NSID: {nsid} (saved to {NSID_FILE})")
+        return nsid
+
     return None
 
 
@@ -245,10 +267,7 @@ def main():
     if not user_id:
         print("Error: flickr_user_id not set — run: python main.py --get-nsid <username>", file=sys.stderr)
         sys.exit(1)
-    if "@" not in user_id:
-        print(f"Error: flickr_user_id looks like a username ({user_id!r}), expected an NSID like 12345678@N00", file=sys.stderr)
-        print("Run: python main.py --get-nsid <username>", file=sys.stderr)
-        sys.exit(1)
+
     if not settings.api_key:
         print("Error: FLICKR_INDEX_API_KEY is not set in .env", file=sys.stderr)
         sys.exit(1)
