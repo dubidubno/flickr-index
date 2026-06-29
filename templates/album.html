@@ -23,6 +23,13 @@
     margin-top: 0.25rem;
   }
 
+  .flickr-link {
+    display: inline-block;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+
   .photo-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(100%, 180px), 1fr));
@@ -70,6 +77,9 @@
   <h2>{{ album.title }}</h2>
   {% if album.description %}
   <p>{{ album.description }}</p>
+  {% endif %}
+  {% if album.owner %}
+  <a class="flickr-link" href="https://www.flickr.com/photos/{{ album.owner }}/sets/{{ album.id }}/" target="_blank" rel="noopener">View album on Flickr ↗</a>
   {% endif %}
 </div>
 

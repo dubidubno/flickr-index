@@ -127,6 +127,7 @@ def build_album_meta(raw: dict, photos_by_id: dict) -> dict:
         thumb_local = None
     return {
         "id": raw["id"],
+        "owner": raw.get("owner", ""),
         "title": raw["title"]["_content"],
         "description": raw["description"]["_content"],
         "slug": slugify(raw["title"]["_content"]),
@@ -325,6 +326,7 @@ def test_api_connection():
 def main():
     parser = argparse.ArgumentParser(description="Generate static Flickr photo pages")
     parser.add_argument("--force", action="store_true", help="Re-download all photos, re-fetch EXIF/location")
+    parser.add_argument("--force-render", action="store_true", help="Re-render all HTML pages without re-downloading")
     parser.add_argument("--cron", action="store_true", help="Suppress console output (log to file only)")
     parser.add_argument("--debug", action="store_true", help="Set log level to DEBUG")
     parser.add_argument("--authenticate", action="store_true", help="Run Flickr OAuth flow and store token, then exit")
@@ -392,7 +394,7 @@ def main():
             if i % 10 == 0:
                 state.save(st)
 
-        any_changes = args.force or any(
+        any_changes = args.force or args.force_render or any(
             p["updated"] or p["id"] not in known_ids for p in photos
         )
 
@@ -421,9 +423,16 @@ def main():
         total_album_pages = 0
         for raw_album in raw_albums:
             album = build_album_meta(raw_album, photos_by_id)
-            albums_meta.append(album)
             raw_album_photos = flickr_client.get_album_photos(flickr, raw_album["id"], user_id)
             album_photos = [photos_by_id[p["id"]] for p in raw_album_photos if p["id"] in photos_by_id]
+            album["photos_count"] = len(album_photos)
+            if not album["thumb_url"] and album_photos:
+                album["thumb_url"] = album_photos[0]["thumb_url"]
+                album["thumb_local"] = album_photos[0]["thumb_local"]
+            if not album_photos:
+                logging.debug("Skipping album '%s' — no public photos", album["title"])
+                continue
+            albums_meta.append(album)
             for p in album_photos:
                 photo_to_album.setdefault(p["id"], album)
             album_pages = max(1, math.ceil(len(album_photos) / per_page))
