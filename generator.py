@@ -121,3 +121,30 @@ def render_photo(photo: dict, album: dict | None) -> None:
         album=album,
     )
     _write(out / "photos" / photo["id"] / "index.html", html)
+
+
+def render_sitemap(photos: list[dict], albums: list[dict]) -> None:
+    base = f"{_site_url()}{_base_path()}"
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    def url(loc: str, lastmod: str) -> str:
+        return f"  <url><loc>{loc}</loc><lastmod>{lastmod}</lastmod></url>\n"
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>\n']
+    lines.append('<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n')
+    lines.append(url(f"{base}/", today))
+    lines.append(url(f"{base}/albums/", today))
+    for album in albums:
+        lines.append(url(f"{base}/albums/{album['slug']}/", today))
+    for photo in photos:
+        iso = photo.get("date_taken_iso", "")
+        lastmod = iso[:10] if iso else today
+        lines.append(url(f"{base}/photos/{photo['id']}/", lastmod))
+    lines.append("</urlset>\n")
+
+    _write(Path(settings.output_dir) / "sitemap.xml", "".join(lines))
+
+
+def render_robots_txt() -> None:
+    content = "User-agent: *\nAllow: /\n"
+    _write(Path(settings.output_dir) / "robots.txt", content)

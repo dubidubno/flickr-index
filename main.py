@@ -462,6 +462,9 @@ def main():
                 logging.debug("[%d/%d] %s", i, len(photos), photo["title"])
                 generator.render_photo(photo, album=photo_to_album.get(photo["id"]))
 
+            generator.render_sitemap(photos, albums_meta)
+            generator.render_robots_txt()
+
         state.save(st)
 
         duration = datetime.now().astimezone() - run_start
